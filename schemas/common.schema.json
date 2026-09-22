@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "bundle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["providers", "entry"],
+      "properties": {
+        "providers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["claude", "grok"]}},
+        "entry": {"type": "object", "additionalProperties": false, "required": ["source", "target"], "properties": {
+          "source": {"$ref": "#/$defs/relativePath"}, "target": {"const": "CLAUDE.md"}
+        }}
+      }
+    },
+    "bundles": {
+      "type": "object", "minProperties": 1, "maxProperties": 1,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"},
+      "additionalProperties": {"$ref": "#/$defs/bundle"}
+    },
+    "bundleIds": {"type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"}},
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?![./])(?:[A-Za-z0-9_-][A-Za-z0-9_. -]*)(?:/[A-Za-z0-9_-][A-Za-z0-9_. -]*)*(?![\\s\\S])",
+      "maxLength": 240
+    },
+    "subdirectory": {
+      "anyOf": [
+        {
+          "const": "."
+        },
+        {
+          "$ref": "#/$defs/relativePath"
+        }
+      ]
+    },
+    "gitSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "git"
+            },
+            "transport": {
+              "const": "local"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^(?!/|[A-Za-z]:|-)[^\\\\\\u0000-\\u001f\\u007f\\u0085\\u2028\\u2029\\ufeff]+(?![\\s\\S])"
+            },
+            "ref": {
+              "$ref": "#/$defs/gitRef"
+            },
+            "subdirectory": {
+              "$ref": "#/$defs/subdirectory"
+            }
+          },
+          "required": [
+            "type",
+            "transport",
+            "path",
+            "ref",
+            "subdirectory"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "git"
+            },
+            "transport": {
+              "const": "remote"
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048,
+              "pattern": "^(?:https://[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]+)?/[^?#\\\\\\u0000-\\u0020\\u007f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+|ssh://(?:[A-Za-z0-9_][A-Za-z0-9_.-]*@)?[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]+)?/[^?#\\\\\\u0000-\\u0020\\u007f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+)(?![\\s\\S])"
+            },
+            "ref": {
+              "$ref": "#/$defs/gitRef"
+            },
+            "subdirectory": {
+              "$ref": "#/$defs/subdirectory"
+            }
+          },
+          "required": [
+            "type",
+            "transport",
+            "url",
+            "ref",
+            "subdirectory"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "single-repo",
+            "multi-repo"
+          ]
+        },
+        "repositories": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "role": {
+                "enum": [
+                  "code",
+                  "documentation",
+                  "library"
+                ]
+              },
+              "source": {
+                "$ref": "#/$defs/gitSource"
+              }
+            },
+            "required": [
+              "path",
+              "role"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "documentation": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+            },
+            "path": {
+              "$ref": "#/$defs/subdirectory"
+            }
+          },
+          "required": [
+            "repository",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "projectRoots": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+              },
+              "path": {
+                "$ref": "#/$defs/subdirectory"
+              }
+            },
+            "required": [
+              "repository",
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "repositories",
+        "documentation"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "single-repo"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "repositories": {
+                "maxProperties": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "repositories": {
+                "minProperties": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "agentsDocument": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "default"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "source"
+            },
+            "path": {
+              "$ref": "#/$defs/relativePath"
+            }
+          },
+          "required": [
+            "mode",
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "gitRef": {
+      "type": "string",
+      "maxLength": 240,
+      "pattern": "^(?!.*\\.\\.)(?!.*//)[A-Za-z0-9][A-Za-z0-9_./-]*(?![\\s\\S])"
+    }
+  }
+}

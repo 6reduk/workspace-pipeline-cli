@@ -1,0 +1,60 @@
+name: Release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: workspace-pipeline-npm-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:packed:providers
+      - name: Pack release bytes
+        run: npm pack --ignore-scripts
+      - name: Check immutable registry identity
+        id: identity
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          status="$(curl --silent --show-error --output registry-version.json --write-out '%{http_code}' "https://registry.npmjs.org/@6reduk%2fworkspace-pipeline/$version")"
+          case "$status" in
+            200)
+              node --input-type=module -e "import fs from 'node:fs';import crypto from 'node:crypto';const v=JSON.parse(fs.readFileSync('registry-version.json'));const b=fs.readFileSync('6reduk-workspace-pipeline-${version}.tgz');if(v.dist?.integrity!=='sha512-'+crypto.createHash('sha512').update(b).digest('base64'))throw Error('Published version differs');"
+              echo 'published=true' >> "$GITHUB_OUTPUT" ;;
+            404) echo 'published=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo "Registry status $status; refusing publication"; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-pipeline-npm-package
+          path: 6reduk-workspace-pipeline-*.tgz
+          if-no-files-found: error
+      - name: Publish using npm trusted publishing
+        if: vars.NPM_PUBLISH_ENABLED == 'true' && steps.identity.outputs.published != 'true'
+        run: npm publish ./6reduk-workspace-pipeline-${{ steps.identity.outputs.version }}.tgz --access public --provenance=false
+      - name: Verify registry integrity
+        if: vars.NPM_PUBLISH_ENABLED == 'true'
+        run: |
+          npm view "@6reduk/workspace-pipeline@${{ steps.identity.outputs.version }}" dist.integrity --json > registry-integrity.json
+          node --input-type=module -e "import fs from 'node:fs';import crypto from 'node:crypto';const b=fs.readFileSync('6reduk-workspace-pipeline-${{ steps.identity.outputs.version }}.tgz');if(JSON.parse(fs.readFileSync('registry-integrity.json'))!=='sha512-'+crypto.createHash('sha512').update(b).digest('base64'))throw Error('Registry integrity mismatch');"
+      - name: Bootstrap handoff
+        if: vars.NPM_PUBLISH_ENABLED != 'true'
+        run: echo 'Tested artifact only. First publish requires maintainer npm authentication; configure trust before enabling publication.' >> "$GITHUB_STEP_SUMMARY"

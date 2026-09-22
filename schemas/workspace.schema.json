@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "bundles": {"$ref": "common.schema.json#/$defs/bundleIds"},
+    "schemaVersion": {
+      "const": 1
+    },
+    "pipeline": {
+      "$ref": "common.schema.json#/$defs/gitSource"
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "codex",
+          "claude",
+          "kimi",
+          "grok"
+        ]
+      }
+    },
+    "layout": {
+      "$ref": "common.schema.json#/$defs/layout"
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+    },
+    "agentsDocument": {
+      "$ref": "common.schema.json#/$defs/agentsDocument"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "pipeline"
+  ],
+  "additionalProperties": false,
+  "anyOf": [
+    {"required": ["providers"], "properties": {"providers": {"minItems": 1}}},
+    {"required": ["bundles"]}
+  ],
+  "oneOf": [
+    {
+      "required": [
+        "layout"
+      ],
+      "not": {
+        "required": [
+          "profile"
+        ]
+      }
+    },
+    {
+      "required": [
+        "profile"
+      ],
+      "not": {
+        "required": [
+          "layout"
+        ]
+      }
+    }
+  ]
+}

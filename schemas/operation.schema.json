@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "plan"
+        },
+        "workspace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "command": {
+          "enum": [
+            "init",
+            "setup",
+            "adopt",
+            "update",
+            "repair",
+            "remove",
+            "switch"
+          ]
+        },
+        "beforeStateHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "state.schema.json#/$defs/snapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "desired": {
+          "anyOf": [
+            {
+              "$ref": "state.schema.json#/$defs/deployment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/target"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "workspace",
+        "command",
+        "beforeStateHash",
+        "source",
+        "desired",
+        "targets"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "receipt"
+        },
+        "planDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "failed",
+            "uncertain"
+          ]
+        },
+        "operations": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/receipt"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "planDigest",
+        "status",
+        "operations"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "target": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 240,
+          "pattern": "^(?!/)[A-Za-z0-9_.-][A-Za-z0-9_. /-]*(?![\\s\\S])"
+        },
+        "action": {
+          "enum": [
+            "create",
+            "replace",
+            "delete",
+            "verify-absent",
+            "edit-fields"
+          ]
+        },
+        "owner": {
+          "enum": [
+            "shared",
+            "codex",
+            "claude",
+            "kimi",
+            "grok"
+          ]
+        },
+        "beforeHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "desiredHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "object",
+            "properties": {
+              "pointer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "beforeHash": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "desiredHash": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "pointer",
+              "beforeHash",
+              "desiredHash"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "action",
+        "owner",
+        "beforeHash",
+        "desiredHash",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "failed",
+            "uncertain",
+            "skipped"
+          ]
+        },
+        "beforeHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "desiredHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "status",
+        "beforeHash",
+        "desiredHash",
+        "observedHash"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

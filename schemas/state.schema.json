@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recovery", "recoveryHash", "journalHead"],
+      "properties": {
+        "recovery": {"type": "string", "pattern": "^\\.pipeline/transactions/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/recovery\\.json(?![\\s\\S])"},
+        "recoveryHash": {"$ref": "#/$defs/digest"},
+        "journalHead": {
+          "type": "object", "additionalProperties": false, "required": ["sequence", "hash"],
+          "properties": {"sequence": {"type": "integer", "minimum": 1, "maximum": 20001}, "hash": {"$ref": "#/$defs/digest"}}
+        }
+      }
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "not-installed",
+        "drift",
+        "conflict",
+        "unsupported",
+        "needs-reconciliation"
+      ]
+    },
+    "runtime": {
+      "enum": [
+        "not-run",
+        "pass",
+        "fail"
+      ]
+    },
+    "active": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/deployment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pending": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "workspace",
+    "status",
+    "runtime",
+    "active",
+    "pending"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+    },
+    "relative": {
+      "type": "string",
+      "maxLength": 240,
+      "pattern": "^(?!/)[A-Za-z0-9_.-][A-Za-z0-9_. /-]*(?![\\s\\S])"
+    },
+    "origin": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "base": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+        },
+        "resolvedSource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "path",
+        "base",
+        "digest",
+        "resolvedSource"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "common.schema.json#/$defs/gitSource"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})(?![\\s\\S])"
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 240,
+          "pattern": "^(?!/)[A-Za-z0-9_.-][A-Za-z0-9_. /-]*(?![\\s\\S])"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+        },
+        "inventoryDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+        },
+        "origin": {
+          "$ref": "#/$defs/origin"
+        }
+      },
+      "required": [
+        "source",
+        "commit",
+        "path",
+        "digest",
+        "inventoryDigest",
+        "origin"
+      ],
+      "additionalProperties": false
+    },
+    "ownership": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 240,
+          "pattern": "^(?!/)[A-Za-z0-9_.-][A-Za-z0-9_. /-]*(?![\\s\\S])"
+        },
+        "kind": {
+          "enum": [
+            "file",
+            "field"
+          ]
+        },
+        "pointer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:/(?:[^~/]|~[01])*)+(?![\\s\\S])",
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owner": {
+          "enum": [
+            "shared",
+            "codex",
+            "claude",
+            "kimi",
+            "grok"
+          ]
+        },
+        "beforeHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "managedHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+        },
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 240,
+              "pattern": "^(?!/)[A-Za-z0-9_.-][A-Za-z0-9_. /-]*(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "pointer",
+        "owner",
+        "beforeHash",
+        "managedHash",
+        "backup"
+      ],
+      "additionalProperties": false
+    },
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "bundles": {"$ref": "common.schema.json#/$defs/bundles"},
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "pipelineId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+        },
+        "version": {
+          "$ref": "pipeline.schema.json#/properties/version"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "layout": {
+          "$ref": "common.schema.json#/$defs/layout"
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "codex",
+              "claude",
+              "kimi",
+              "grok"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "agentsDocument": {
+          "$ref": "common.schema.json#/$defs/agentsDocument"
+        },
+        "adapterVersions": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "codex",
+              "claude",
+              "kimi",
+              "grok"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "owned": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/ownership"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "pipelineId",
+        "version",
+        "snapshot",
+        "layout",
+        "providers",
+        "adapterVersions",
+        "owned"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

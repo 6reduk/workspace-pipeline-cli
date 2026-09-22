@@ -1,0 +1,39 @@
+{
+  "name": "@6reduk/workspace-pipeline",
+  "version": "0.1.0",
+  "description": "Workspace-local Git pipeline configuration dispatcher",
+  "type": "module",
+  "bin": {
+    "workspace-pipeline": "src/cli.js"
+  },
+  "files": [
+    "src/",
+    "schemas/",
+    "docs/"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/6reduk/workspace-pipeline-cli.git"
+  },
+  "scripts": {
+    "check": "node --check src/cli.js",
+    "test": "node --test test/*.test.js",
+    "pack:check": "npm pack --dry-run --ignore-scripts",
+    "test:packed": "node scripts/verify-packed-cli.mjs",
+    "test:packed:identity": "node scripts/verify-packed-identity.mjs",
+    "test:packed:providers": "node scripts/verify-packed-providers.mjs",
+    "test:packed:pilot": "node scripts/verify-packed-pilot.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "yaml": "2.9.1",
+    "toml-eslint-parser": "0.10.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

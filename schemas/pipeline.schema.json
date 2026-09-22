@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "bundles": {"$ref": "common.schema.json#/$defs/bundles"},
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?![\\s\\S])"
+    },
+    "resources": {
+      "$ref": "common.schema.json#/$defs/relativePath"
+    },
+    "providers": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "codex": {
+          "type": "object",
+          "properties": {
+            "skills": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agents": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mcp": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entryInstructions": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requires": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "skills",
+                  "agents",
+                  "mcp",
+                  "entry-instructions",
+                  "compatibility-isolation"
+                ]
+              }
+            }
+          },
+          "required": [
+            "skills",
+            "agents",
+            "mcp",
+            "entryInstructions",
+            "requires"
+          ],
+          "additionalProperties": false
+        },
+        "claude": {
+          "type": "object",
+          "properties": {
+            "skills": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agents": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mcp": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entryInstructions": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requires": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "skills",
+                  "agents",
+                  "mcp",
+                  "entry-instructions",
+                  "compatibility-isolation"
+                ]
+              }
+            }
+          },
+          "required": [
+            "skills",
+            "agents",
+            "mcp",
+            "entryInstructions",
+            "requires"
+          ],
+          "additionalProperties": false
+        },
+        "kimi": {
+          "type": "object",
+          "properties": {
+            "skills": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agents": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mcp": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entryInstructions": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requires": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "skills",
+                  "agents",
+                  "mcp",
+                  "entry-instructions",
+                  "compatibility-isolation"
+                ]
+              }
+            }
+          },
+          "required": [
+            "skills",
+            "agents",
+            "mcp",
+            "entryInstructions",
+            "requires"
+          ],
+          "additionalProperties": false
+        },
+        "grok": {
+          "type": "object",
+          "properties": {
+            "skills": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agents": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mcp": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entryInstructions": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/relativePath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requires": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "skills",
+                  "agents",
+                  "mcp",
+                  "entry-instructions",
+                  "compatibility-isolation"
+                ]
+              }
+            }
+          },
+          "required": [
+            "skills",
+            "agents",
+            "mcp",
+            "entryInstructions",
+            "requires"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "workspaceProfiles": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,62}(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/layout"
+      }
+    },
+    "agentsDocument": {
+      "$ref": "common.schema.json#/$defs/agentsDocument"
+    },
+    "inventory": {
+      "$ref": "common.schema.json#/$defs/relativePath"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "version",
+    "resources",
+    "providers",
+    "agentsDocument",
+    "inventory"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "minProperties": 1,
+  "maxProperties": 9999,
+  "propertyNames": {
+    "type": "string",
+    "maxLength": 240,
+    "pattern": "^(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9_.-][A-Za-z0-9_. -]*(?:/[A-Za-z0-9_.-][A-Za-z0-9_. -]*)*(?![\\s\\S])"
+  },
+  "additionalProperties": {
+    "type": "string",
+    "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+  }
+}
