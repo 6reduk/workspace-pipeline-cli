@@ -25,11 +25,12 @@ jobs:
       - run: node scripts/prepare-ci-temp.mjs
       - run: npm run check
       - run: npm test
-      - name: Prime registry metadata for offline packed installation
+      - name: Prime resolved consumer dependencies for offline packed installation
         shell: bash
         run: |
-          node --input-type=module -e "import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('package-lock.json'));for(const [name,v] of Object.entries(p.packages)){if(name.startsWith('node_modules/'))console.log(name.slice(name.lastIndexOf('node_modules/')+13)+'@'+v.version)}" > cache-specs.txt
-          while IFS= read -r spec; do npm cache add "$spec" || exit 1; done < cache-specs.txt
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          version="$(node -p "require('./package.json').version")"
+          npm install --prefix "$RUNNER_TEMP/wpc-cache-primer" --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/6reduk-workspace-pipeline-${version}.tgz"
       - run: npm run test:packed:providers
       - name: Pack release bytes
         run: npm pack --ignore-scripts

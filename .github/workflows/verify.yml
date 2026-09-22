@@ -19,5 +19,9 @@ jobs:
       - run: node scripts/prepare-ci-temp.mjs
       - run: npm run check
       - run: npm test
+        if: runner.os != 'Windows'
+      - name: Full Windows suite with serialized test files
+        if: runner.os == 'Windows'
+        run: node --test --test-concurrency=1 test/*.test.js
       - run: node src/cli.js --help
       - run: npm run pack:check
