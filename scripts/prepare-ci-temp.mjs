@@ -5,7 +5,10 @@ import path from 'node:path';
 import {inspectDirectory} from '../src/workspace/paths.js';
 if(process.env.GITHUB_ACTIONS!=='true'||!process.env.GITHUB_ENV)throw Error('GitHub Actions only');
 const original=tmpdir(),canonical=await realpath(original);
-const scratch=await mkdtemp(path.join(canonical,'wpc-ci-'));
+// Keep deep recovery fixtures inside the existing 240-character Windows budget.
+// Hosted runner drive root is disposable; allocate a unique directory, no cleanup.
+const base=process.platform==='win32'?await realpath(path.parse(process.cwd()).root):canonical;
+const scratch=await mkdtemp(path.join(base,'wpc-'));
 await inspectDirectory(scratch);
 if(/[\r\n]/.test(scratch))throw Error('Unsafe CI scratch');
 await appendFile(process.env.GITHUB_ENV,`TMP=${scratch}\nTEMP=${scratch}\nTMPDIR=${scratch}\n`);
