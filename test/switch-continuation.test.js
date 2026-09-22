@@ -11,7 +11,7 @@ import {createSwitchContinuationRecoveryRecord,validateSwitchContinuationRecover
 
 function recordFixture() {
   const preview=fixture(true),{digest,...body}=preview;
-  Object.assign(body,{workspace:'C:/synthetic-workspace',recoveryPath:'.pipeline/transactions/00000000-0000-0000-0000-000000000001/recovery.json',
+  Object.assign(body,{workspace:path.resolve('synthetic-workspace'),recoveryPath:'.pipeline/transactions/00000000-0000-0000-0000-000000000001/recovery.json',
     recoveryHash:old,stateFileHash:fresh,uncertain:{phase:'remove-old',operationId:'remove',path:'AGENTS.md',
       beforeHash:old,desiredHash:null,observedHash:null,resolution:'verify-desired'}});
   body.predecessor.journal='.pipeline/journals/00000000-0000-0000-0000-000000000001';
@@ -176,7 +176,7 @@ for(const scenario of ['workspace','parent-hash','parent-sequence','parent-diges
   'operation-substitution','replay-completed-phase','omit-remaining','unknown-kind'])
   test('second-generation linkage rejects '+scenario,()=>{
     const {preview:p,evidence:e}=nextGeneration({phase:'install-new',desired:true});
-    if(scenario==='workspace')p.workspace='C:/another-workspace';
+    if(scenario==='workspace')p.workspace=path.resolve('another-workspace');
     if(scenario==='parent-hash')p.recoveryHash=old;
     if(scenario==='parent-sequence')p.predecessor.sequence++;
     if(scenario==='parent-digest')p.predecessor.pending=old;

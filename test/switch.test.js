@@ -33,7 +33,7 @@ function recordFixture() {
   const removal=sign({kind:'prepared-removal',preview:f.removal,stateFileHash:hash,providers:['codex'],backups:[],
     applySupported:true,requiresFreshApproval:true,automaticActions:false,runtime:'not-run'});
   const prepared=sign({kind:'prepared-switch',preview,removal,stateFileHash:hash,
-    preparation:{objects:'C:/synthetic-staging/objects',snapshot:'C:/synthetic-staging/snapshot'},
+    preparation:{objects:path.resolve('synthetic-staging/objects'),snapshot:path.resolve('synthetic-staging/snapshot')},
     sourceVerification:'verified-at-preparation',applySupported:false,requiresFreshApproval:true,runtime:'not-run'});
   return {prepared,approval:{decision:'approve',preparedDigest:prepared.digest},previous:f.previous,
     journal:'.pipeline/journals/00000000-0000-0000-0000-000000000001'};
@@ -201,11 +201,11 @@ test('switch every successful chain prefix is recoverable without inferring late
 });
 
 const hash='sha256:'+'a'.repeat(64),nextHash='sha256:'+'b'.repeat(64);
-function fixture(workspace='C:/synthetic-switch') {
+function fixture(workspace=path.resolve('synthetic-switch')) {
   const oldBytes=Buffer.from('old'),newBytes=Buffer.from('new');
   const snapshot={source:{type:'git',transport:'local',path:'../old',ref:'main',subdirectory:'.'},commit:'a'.repeat(40),
     path:'.pipeline/snapshots/'+hash.slice(7),digest:hash,inventoryDigest:hash,
-    origin:{path:'C:/synthetic-switch/workspace.json',base:workspace,digest:hash,resolvedSource:'C:/old'}};
+    origin:{path:path.join(workspace,'workspace.json'),base:workspace,digest:hash,resolvedSource:path.resolve('synthetic-old')}};
   const layout={kind:'single-repo',repositories:{game:{path:'project',role:'code'}},documentation:{repository:'game',path:'docs'}};
   const owned={path:'AGENTS.md',kind:'file',pointer:null,owner:'shared',beforeHash:null,managedHash:sha256(oldBytes),backup:null};
   const deployment={id:'old',pipelineId:'old',version:'1.0.0',snapshot,layout,providers:['codex'],adapterVersions:{codex:'test'},owned:[owned]};

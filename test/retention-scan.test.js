@@ -36,6 +36,6 @@ test('retention scanner refuses links and foreign group files conservatively',as
   }
 });
 test('retention scanner validates policy and current run before inspection',async()=>{
-  await assert.rejects(()=>scanRetention('C:/unobserved',{...options,currentRuns:['../escape']}),e=>e.code==='retention-scan.current-run');
-  await assert.rejects(()=>scanRetention('C:/unobserved',{...options,policy:{...options.policy,maxAgeDays:-1}}),e=>e.code==='retention.policy');
+  await assert.rejects(()=>scanRetention(path.resolve('unobserved'),{...options,currentRuns:['../escape']}),e=>e.code==='retention-scan.current-run');
+  await assert.rejects(()=>scanRetention(path.resolve('unobserved'),{...options,policy:{...options.policy,maxAgeDays:-1}}),e=>e.code==='retention.policy');
 });

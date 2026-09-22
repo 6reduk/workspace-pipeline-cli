@@ -5,6 +5,7 @@ permissions:
 jobs:
   scaffold:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         node: [22, 24]
@@ -15,6 +16,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
+      - run: node scripts/prepare-ci-temp.mjs
       - run: npm run check
       - run: npm test
       - run: node src/cli.js --help
