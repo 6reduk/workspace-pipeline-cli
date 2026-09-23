@@ -39,8 +39,8 @@ delete pending markers or lock directories to make `doctor` report success.
 
 `no-pending-marker` means exactly that; it does not certify historical completion,
 provider readiness or game runtime. A blocker means further recovery is needed;
-this command never grants itself authority to resolve it. `--json` is redundant
-but accepted because JSON is already the default output.
+this command never grants itself authority to resolve it. Add `--json` for
+machine-readable output and whenever saving a preview for apply.
 
 ## Local recovery ownership
 

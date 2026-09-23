@@ -11,8 +11,9 @@ export function parseLaunch(args) {
   const result = { command: 'launch', provider: 'grok', execute: false, inspect: false }, seen = new Set();
   for (let i = 2; i < args.length; i++) {
     const flag = args[i];
-    if (!['--workspace', '--executable', '--execute', '--inspect'].includes(flag) || seen.has(flag)) fail('cli.arguments');
+    if (!['--workspace', '--executable', '--execute', '--inspect', '--json'].includes(flag) || seen.has(flag)) fail('cli.arguments');
     seen.add(flag);
+    if (flag === '--json') continue;
     if (flag === '--execute') { result.execute = true; continue; }
     if (flag === '--inspect') { result.inspect = true; continue; }
     const value = args[++i];

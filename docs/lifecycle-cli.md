@@ -23,7 +23,8 @@ workspace-pipeline setup --workspace <absolute-wrapper> --apply --preview <absol
 workspace-pipeline update --workspace <absolute-wrapper> --apply --preview <absolute-json-file>
 ```
 
-Preview returns the complete prepared JSON on stdout. It may acquire a Git
+Preview displays a human-readable summary by default. Add `--json` to return
+the complete prepared JSON on stdout for saving and subsequent apply. It may acquire a Git
 source into temporary storage outside the wrapper, but does not write provider
 configuration. Network acquisition requires explicit `--network`. When manifest
 is omitted, setup uses the standard workspace manifest; update uses the recorded
@@ -68,7 +69,7 @@ restoration; empty reset must be explicitly selected.
 
 ## Output and failures
 
-- stdout: one prepared JSON or operation result.
+- stdout: readable result by default; with `--json`, one complete prepared JSON or operation result.
 - stderr during apply: structured journal/recovery locations and operation events.
 - exit 0: preview created, or observed configuration ready with successful lock
   release and reporting. It never certifies harness/MCP runtime.

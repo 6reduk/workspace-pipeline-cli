@@ -125,7 +125,7 @@ test('public CLI cleanup process death after exact unlink preserves uncertain re
   const f=await fixture(),cli=fileURLToPath(new URL('../src/cli.js',import.meta.url));
   const sentinel=path.join(f.wrapper,'project/user.txt');await writeFile(sentinel,'user-owned data');
   const result=await promisify(execFile)(process.execPath,[cli,'logs','clean','--repositories','--workspace',f.wrapper,
-    '--max-age-days','0','--keep-last','0','--max-delete','1']);
+    '--max-age-days','0','--keep-last','0','--max-delete','1','--json']);
   const p=JSON.parse(result.stdout);assert.equal(p.retention.selected.length,1);
   const group=p.groups.find(g=>g.id===p.retention.selected[0].id),target=group.files[0].path;
   const before=new Map(await Promise.all(group.files.map(async f=>[f.path,await readFile(f.path)])));

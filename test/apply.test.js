@@ -449,7 +449,7 @@ for(const mode of ['combined','success','interrupted','reference-drift','cli','s
   if(mode==='cli') {
     const previewFile=path.join(f.root,'cleanup-preview.json');await writeFile(previewFile,JSON.stringify(preview));
     const cli=fileURLToPath(new URL('../src/cli.js',import.meta.url));
-    const result=spawnSync(process.execPath,[cli,'logs','clean','--workspace',f.a,'--apply','--preview',previewFile],
+    const result=spawnSync(process.execPath,[cli,'logs','clean','--workspace',f.a,'--apply','--preview',previewFile,'--json'],
       {encoding:'utf8',windowsHide:true,timeout:120000});
     assert.equal(result.status,0,result.stderr);const output=JSON.parse(result.stdout);
     assert.equal(output.removedGroups,1);assert.equal(output.status,'completed');

@@ -52,7 +52,9 @@ npm run pack:check
 npm run test:packed:providers
 ```
 
-The executable name is `workspace-pipeline`. Doctor prints JSON: exit 0 means
+The executable name is `workspace-pipeline`. Output is readable by default;
+add `--json` for complete machine output. Use `--json` when saving any preview
+for a later apply, even when redirecting stdout to a file. Doctor exit 0 means
 observed configuration ready, 1 means not ready/incomplete, 2 means invocation or
 transport error. Unsupported commands exit with code 2. On Windows use an absolute
 path such as `C:\Projects\my-workspace`. See [doctor](docs/doctor.md) for limits.

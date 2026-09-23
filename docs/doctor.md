@@ -5,7 +5,8 @@ The public CLI exposes it read-only:
 
 `workspace-pipeline doctor --workspace <absolute-path> [--recovery <relative-record>] [--json]`
 
-Output is JSON even without --json. Exit 0 means configuration ready, 1 not ready
+Output is a readable status summary by default. `--json` returns the complete
+machine report (including every target/hash). Exit 0 means configuration ready, 1 not ready
 or incomplete, 2 invalid invocation or output failure. This is not an install command.
 
 `ready` means observed **configuration readiness**, never a running harness,

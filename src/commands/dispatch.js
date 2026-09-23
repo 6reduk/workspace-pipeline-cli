@@ -62,7 +62,9 @@ Preview stages Git externally; inspect is read-only/offline. JSON can contain
 private config bytes. Only explicit apply writes or clears a validated pending marker.
 Apply requires the saved installer-bound envelope and accepts no source overrides.
 
-Doctor is read-only and prints JSON. Exit 0 means observed configuration ready;
+Output is human-readable by default; use --json for complete machine output.
+Save previews for apply with --json (including when redirecting stdout).
+Doctor is read-only. Exit 0 means observed configuration ready;
 exit 1 means not ready/incomplete; exit 2 means invalid invocation or unavailable command.
 Runtime, MCP/harness discovery and provider compatibility are NOT verified.
 No source access, automatic repair or lock removal. Read-only/configuration commands never clean history.
@@ -134,14 +136,14 @@ logs clean --repositories --workspace <absolute-directory> --max-age-days <N>
 Apply with --repositories --apply --preview <file>; this is a separate cleanup
 domain, never an implicit increase of the ordinary journal deletion budget.
 Execution inputs are retained privately under .pipeline/repository-inputs;
---json is optional because JSON is the default.
+--json selects the complete machine-readable result without presentation changes.
 This package is not ready to replace an existing installation.`;
 
 // Parse strictly before any filesystem observation. Never echo unknown arguments
 // (which can contain credentials). Output transport is trusted CLI code.
 export function parseCommand(args) {
   if(!Array.isArray(args) || args.some(a=>typeof a!=='string')) fail('cli.arguments');
-  if(args.length===0 || (args.length===1 && ['--help','-h'].includes(args[0])))return {command:'help'};
+  if(args.length===0 || (['--help','-h'].includes(args[0]) && (args.length===1 || (args.length===2 && args[1]==='--json'))))return {command:'help'};
   if(args[0]==='launch')return parseLaunch(args);
   if(args[0]==='rebind')return parseRebind(args);
   if(args[0]==='reset')return parseReset(args);

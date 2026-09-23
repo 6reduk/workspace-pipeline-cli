@@ -27,7 +27,7 @@ commit, not uncommitted files of its source.
 workspace-pipeline wrap --workspace "C:\Work\GameWorkspace" --manifest "C:\Work\workspace.json" --choices "C:\Work\choices.json"
 ```
 
-Save the exact JSON stdout as UTF-8 `preview.json` outside the affected repository
+Use `--json` and save the exact JSON stdout as UTF-8 `preview.json` outside the affected repository
 and wrapper. Read its operations and blockers. Preview may acquire a temporary
 Git snapshot, but does not perform repository effects. Remote access is explicit
 with `--network`; local Git does not need that flag. Do not put credentials into

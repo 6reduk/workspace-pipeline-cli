@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {parseCommand,runCli} from '../src/commands/dispatch.js';
 
 const entry=fileURLToPath(new URL('../src/cli.js',import.meta.url));
-const invoke=args=>spawnSync(process.execPath,[entry,...args],{encoding:'utf8',windowsHide:true,timeout:30000});
+const invoke=args=>spawnSync(process.execPath,[entry,...args,...(args.includes('--json')?[]:['--json'])],{encoding:'utf8',windowsHide:true,timeout:30000});
 test('CLI bootstrap retirement admits only preview or explicit apply without selector overrides',()=>{
   const base=['repositories','retire-bootstrap','--workspace',path.resolve('synthetic')];
   assert.equal(parseCommand(base).action,'retire-bootstrap');

@@ -15,8 +15,8 @@ The following PowerShell example uses illustrative absolute paths; replace them.
 Use a private directory for preview files: they can contain configuration values.
 
 ```powershell
-workspace-pipeline rebind --workspace 'C:\Work\Game' --manifest 'C:\Work\Game\workspace.json' > 'C:\Private\rebind.json'
-workspace-pipeline update --workspace 'C:\Work\Game' --accept-rebind 'C:\Private\rebind.json' > 'C:\Private\update.json'
+workspace-pipeline rebind --workspace 'C:\Work\Game' --manifest 'C:\Work\Game\workspace.json' --json > 'C:\Private\rebind.json'
+workspace-pipeline update --workspace 'C:\Work\Game' --accept-rebind 'C:\Private\rebind.json' --json > 'C:\Private\update.json'
 workspace-pipeline update --workspace 'C:\Work\Game' --apply --preview 'C:\Private\update.json'
 workspace-pipeline doctor --workspace 'C:\Work\Game'
 ```

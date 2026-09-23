@@ -50,7 +50,7 @@ try{
   await mkdir(path.join(a,'.kimi-code'));await writeFile(path.join(a,'.kimi-code/mcp.json'),kimiForeign);
   await mkdir(path.join(a,'.grok'));await writeFile(path.join(a,'.grok/config.toml'),grokForeign);
   function run(args,expected=0){
-    const result=spawnSync(process.execPath,[cli,...args],{cwd:prefix,env,encoding:'utf8',windowsHide:true,timeout:120000,maxBuffer:8*1024*1024});
+    const result=spawnSync(process.execPath,[cli,...args,...(args.includes('--json')?[]:['--json'])],{cwd:prefix,env,encoding:'utf8',windowsHide:true,timeout:120000,maxBuffer:8*1024*1024});
     assert.equal(result.status,expected,JSON.stringify({command:args[0],status:result.status,error:result.error?.code,stderr:result.stderr}));
     return JSON.parse(expected===0?result.stdout:result.stderr);
   }

@@ -35,7 +35,7 @@ try {
   const cli=path.join(installed,metadata.bin['workspace-pipeline']);
   const run=(args,expected=0)=>{
     let out,code=0;
-    try{out=execFileSync(process.execPath,[cli,...args],{cwd:prefix,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:4*1024*1024,stdio:['ignore','pipe','pipe']});}
+    try{out=execFileSync(process.execPath,[cli,...args,...(args.includes('--json')?[]:['--json'])],{cwd:prefix,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:4*1024*1024,stdio:['ignore','pipe','pipe']});}
     catch(e){code=e.status;out=e.stdout;}
     assert.equal(code,expected,'packaged CLI exit for '+args.slice(0,3).join(' '));return out;
   };

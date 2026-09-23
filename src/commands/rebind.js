@@ -9,8 +9,9 @@ export function parseRebind(args) {
   const result={command:'rebind'},seen=new Set();
   for(let i=1;i<args.length;i++) {
     const flag=args[i];
-    if(!['--workspace','--manifest'].includes(flag) || seen.has(flag))fail('cli.arguments');
+    if(!['--workspace','--manifest','--json'].includes(flag) || seen.has(flag))fail('cli.arguments');
     seen.add(flag);
+    if(flag==='--json')continue;
     const value=args[++i];if(!value || value.startsWith('--'))fail('cli.arguments');
     result[flag==='--workspace'?'workspace':'manifestPath']=absoluteRoot(value);
   }

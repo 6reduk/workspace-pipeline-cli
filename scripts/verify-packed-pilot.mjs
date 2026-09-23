@@ -60,7 +60,7 @@ try{
     const manifest={schemaVersion:1,pipeline:{type:'git',transport:'local',path:'../source',ref:'main',subdirectory:'.'},providers:[order[0]],layout};
     const manifestPath=path.join(wrapper,'workspace.json');await writeFile(manifestPath,JSON.stringify(manifest));
     const run=(args,expected=0)=>{
-      const result=spawnSync(process.execPath,[cli,...args],{cwd:consumer,env,encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:8*1024*1024});
+      const result=spawnSync(process.execPath,[cli,...args,...(args.includes('--json')?[]:['--json'])],{cwd:consumer,env,encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:8*1024*1024});
       assert.equal(result.status,expected,JSON.stringify({args,status:result.status,error:result.error?.code,stderr:result.stderr}));
       return JSON.parse(result.stdout);
     };

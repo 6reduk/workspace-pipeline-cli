@@ -75,7 +75,8 @@ check has cost proportional to selected files times retained records, bounded by
 scan limits and the user deletion cap. It is not a linear-cost guarantee or an
 OS-wide defense against hostile concurrent filesystem writers.
 
-Progress is emitted as JSON on stderr; final JSON is on stdout. The receipt path
+With `--json`, progress is emitted as JSON on stderr and final JSON on stdout;
+otherwise both are formatted for reading. Save apply previews using `--json`. The receipt path
 is under `.pipeline/cleanup/<run-id>.json`. Receipts record selected file hashes,
 confirmed deletions, reclaimed bytes, current intent and failures. These receipts
 describe attempted/deleted paths; unlike operational recovery records, they are

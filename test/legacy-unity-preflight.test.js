@@ -86,7 +86,7 @@ test('begin persists private recovery, uses authenticated lease and keeps provid
   const untouched=await prepareLegacyUnityDeactivationResume(f.wrapper,begun.recoveryPath);
   assert.deepEqual(untouched.operations.map(o=>o.action),['write-disabled','write-disabled']);
   const cli=spawnSync(process.execPath,[path.resolve('src/cli.js'),'migration','unity','inspect','--workspace',f.wrapper,
-   '--recovery',begun.recoveryPath,'--phase','deactivation'],{encoding:'utf8',windowsHide:true,timeout:60000});
+   '--recovery',begun.recoveryPath,'--phase','deactivation','--json'],{encoding:'utf8',windowsHide:true,timeout:60000});
   assert.equal(cli.status,0,cli.stderr);assert.equal(JSON.parse(cli.stdout).preview.digest,untouched.digest);
   assert.equal(JSON.parse(cli.stdout).kind,'installer-bound-migration-preview');
   assert.match(cli.stderr,/private configuration/);
@@ -381,7 +381,7 @@ test('approved pre-install compensation restores exact legacy bytes and failure 
 test('public CLI preview/apply rejects changed installer then completes synthetic migration',async()=>{
  const f=await fixture(),manifestPath=path.join(f.manifestBase,'workspace.json');
  await writeFile(manifestPath,JSON.stringify({schemaVersion:1,pipeline:f.source,providers:['codex','claude'],layout:{kind:'single-repo',repositories:{game:{path:'project',role:'code'}},documentation:{repository:'game',path:'docs'}}}));
- const cli=args=>spawnSync(process.execPath,[process.env.WPC_TEST_MIGRATION_CLI??path.resolve('src/cli.js'),...args],{encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:8*1024*1024});
+ const cli=args=>spawnSync(process.execPath,[process.env.WPC_TEST_MIGRATION_CLI??path.resolve('src/cli.js'),...args,...(args.includes('--json')?[]:['--json'])],{encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:8*1024*1024});
  const prepared=cli(['migration','unity','preview','--workspace',f.wrapper,'--manifest',manifestPath]);
  assert.equal(prepared.status,0,prepared.stderr);const envelope=JSON.parse(prepared.stdout);
  assert.equal(envelope.kind,'installer-bound-migration-preview');assert.equal((await readdir(f.wrapper)).includes('.pipeline'),false);

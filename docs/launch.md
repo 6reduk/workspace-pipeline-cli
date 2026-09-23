@@ -1,5 +1,19 @@
 # Scoped Grok launch (S11 development)
 
+## Configuration limitation (checked 2026-09-23)
+
+The desired UX is ordinary `grok` with workspace-local compatibility settings,
+not a mandatory launcher. This is currently blocked by the harness: installed
+Grok 1.0.40 and the upstream configuration reference list only `mcp_servers`,
+`plugins`, `permission`, and `mcp.max_output_bytes` as project config inputs.
+`compat.claude` is not among them. Writing five false values locally must not be
+represented as working import suppression. The CLI does not change user-wide
+compat settings as a substitute. The legacy launch route below remains an
+explicit workaround, not the approved long-term configuration model.
+
+Source: [Grok configuration reference](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/26-config-reference.md),
+configuration layers and `compat` fields. No new live-isolation claim is made.
+
 This command starts Grok from an already configured workspace with five Claude
 compatibility switches set to false in the child environment: skills, rules, agents,
 MCP and hooks. It does not install a pipeline. Configure Grok using the ordinary

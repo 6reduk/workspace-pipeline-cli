@@ -13,7 +13,7 @@ Close running harnesses/configuration editors. Keep preview files private: they
 contain before/after bytes, potentially including MCP credentials.
 
 ```powershell
-workspace-pipeline reset --workspace 'C:\Work\Game' --all > 'C:\Private\reset.json'
+workspace-pipeline reset --workspace 'C:\Work\Game' --all --json > 'C:\Private\reset.json'
 # Check $LASTEXITCODE and review reset.scope, reset.backup and preview.plan.targets.
 workspace-pipeline reset --workspace 'C:\Work\Game' --apply --preview 'C:\Private\reset.json'
 workspace-pipeline doctor --workspace 'C:\Work\Game'

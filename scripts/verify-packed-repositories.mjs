@@ -16,7 +16,7 @@ export async function verifyPackedRepositories({root,installed,cli,report}) {
     env:{...process.env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:process.platform==='win32'?'NUL':'/dev/null',GIT_TERMINAL_PROMPT:'0'}}).trim();
   const invoke=(args,expected=0)=>{
     let out,err='',code=0;
-    try{out=execFileSync(process.execPath,[cli,...args],{cwd:base,encoding:'utf8',windowsHide:true,
+    try{out=execFileSync(process.execPath,[cli,...args,...(args.includes('--json')?[]:['--json'])],{cwd:base,encoding:'utf8',windowsHide:true,
       timeout:120000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']});}
     catch(e){code=e.status;out=e.stdout;err=e.stderr;}
     assert.equal(code,expected,JSON.stringify({args,code,stderr:String(err)}));

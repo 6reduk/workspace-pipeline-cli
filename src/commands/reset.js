@@ -11,8 +11,9 @@ export function parseReset(args){
   const result={command:'reset'},seen=new Set();
   for(let i=1;i<args.length;i++){
     const flag=args[i];
-    if(!['--workspace','--to','--all','--providers','--bundles','--apply','--preview'].includes(flag) || seen.has(flag))fail('cli.arguments');
+    if(!['--workspace','--to','--all','--providers','--bundles','--apply','--preview','--json'].includes(flag) || seen.has(flag))fail('cli.arguments');
     seen.add(flag);
+    if(flag==='--json')continue;
     if(flag==='--apply'){result.apply=true;continue;}
     if(flag==='--all'){(result.options??={}).all=true;continue;}
     const value=args[++i];if(!value || value.startsWith('--'))fail('cli.arguments');
