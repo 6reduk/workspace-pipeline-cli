@@ -9,6 +9,7 @@ import { checkPreview, composePlan } from './plan.js';
 import { assertLockHeld } from './lock.js';
 import { requestShape } from './ownership.js';
 import {planObservationPaths,retiredBundleOwnership} from './bundle-update.js';
+import {retiredSkillOwnership} from './skill-retirement.js';
 import {readConfigField} from './config-fields.js';
 import { planLayout } from '../workspace/resolve.js';
 import { cap, LIMITS, sha256 } from '../source/inventory.js';
@@ -18,6 +19,8 @@ import {verifyRepairApproval,validateRepairRecord} from './repair.js';
 import {verifyContinuationApproval,validateContinuationRecord,continuationTargetAction,continuationCommand} from './reconciliation.js';
 import {createLineageGuard} from './lineage-guard.js';
 import {verifyRemovalApproval,validateRemovalRecord} from './remove.js';
+import {verifyResetApproval,validateResetRecord} from './reset.js';
+import {assertResetTreeScope,resetBackupBytes} from './reset-scope.js';
 
 const fileHash=bytes=>bytes===null?null:sha256(bytes);
 const recordBytes=value=>{
@@ -59,26 +62,32 @@ export async function inspectRecovery(workspace,recoveryPath,options={}) {
   const repair=recovery.prepared?.kind==='prepared-repair';
   const continuation=recovery.prepared?.kind==='prepared-continuation';
   const removal=recovery.prepared?.kind==='prepared-removal';
-  const prepared=removal?validateRemovalRecord(recovery.prepared,recovery.approval):continuation?validateContinuationRecord(recovery.prepared,recovery.approval):repair?validateRepairRecord(recovery.prepared,recovery.approval):validatePreparedRecord(recovery.prepared,recovery.approval),previous=structuredClone(recovery.previous);
+  const reset=recovery.prepared?.kind==='prepared-reset';
+  const prepared=reset?validateResetRecord(recovery.prepared,recovery.approval):removal?validateRemovalRecord(recovery.prepared,recovery.approval):continuation?validateContinuationRecord(recovery.prepared,recovery.approval):repair?validateRepairRecord(recovery.prepared,recovery.approval):validatePreparedRecord(recovery.prepared,recovery.approval),previous=structuredClone(recovery.previous);
   const declared=prepared.preview.observations;
   if(!Array.isArray(declared))fail('recovery.record');
   const before=declared.map(o=>({path:o.path,bytes:o.bytes===null?null:Buffer.from(o.bytes,'base64')}));
   checkPreview(prepared.preview,previous,before);
   const plan=prepared.preview.plan;
-  const removalFlow=removal || (continuation && plan.command==='remove');
+  const removalFlow=removal || plan.command==='reset' || (continuation && plan.command==='remove');
   const deployment=removalFlow?previous?.active:plan.desired;
-  if(plan.workspace!==workspace || !(removalFlow?['remove']:continuation?['repair','update']:repair?['repair']:['setup','update']).includes(plan.command) || !deployment || !plan.source ||
+  if(plan.workspace!==workspace || !(plan.command==='reset' && (reset || continuation)?['reset']:removalFlow?['remove']:continuation?['repair','update']:repair?['repair']:['setup','update']).includes(plan.command) || !deployment || !plan.source ||
       contractDigest(plan.source)!==contractDigest(deployment.snapshot) ||
       plan.source.path!=='.pipeline/snapshots/'+plan.source.digest.slice(7))fail('recovery.binding');
   if(repair && (!previous?.active || contractDigest(plan.desired)!==contractDigest(previous.active) ||
       plan.targets.some(t=>!['create','edit-fields'].includes(t.action) || t.fields.some(f=>f.beforeHash!==null))))fail('recovery.binding');
   const lineage=continuation?await verifyContinuationLineage(workspace,prepared,previous):[];
   const expectedBackups=new Set(deployment.owned.filter(o=>o.backup!==null).map(o=>o.backup)),seen=new Set();
+  if(plan.command==='reset')for(const b of [...prepared.reset.backup.files,prepared.reset.backup.manifest])expectedBackups.add(b.path);
   for(const backup of recovery.backups) {
     requestShape(backup,['path','hash','existing'],[],'recovery.backup');
     if(!expectedBackups.has(backup.path) || seen.has(backup.path) || typeof backup.existing!=='boolean' ||
         !/^sha256:[a-f0-9]{64}$/.test(backup.hash))fail('recovery.backup');
     seen.add(backup.path);
+    if(plan.command==='reset'){
+      const expected=[...prepared.reset.backup.files,prepared.reset.backup.manifest].find(b=>b.path===backup.path);
+      if(expected && expected.hash!==backup.hash)fail('recovery.backup');
+    }
   }
   if(seen.size!==expectedBackups.size)fail('recovery.backup');
   const journalPath='.pipeline/journals/'+match[1];
@@ -258,6 +267,24 @@ export async function applyRepair(lock,prepared,approval,registry,options={}) {
     ()=>verifyRepairApproval(lock,copy,approval,registry),options);
 }
 
+export async function applyReset(lock,prepared,approval,registry,options={}) {
+  const copy=await verifyResetApproval(lock,prepared,approval,registry);
+  const previous=(await readState(resolveChild(lock.workspace,'.pipeline/state.json'))).value;
+  await preflightPreview(lock,copy.preview,previous,copy.stateFileHash);
+  const active=previous.active,source=active.snapshot;
+  const snapshot={snapshotPath:resolveChild(lock.workspace,source.path),manifest:{id:active.pipelineId,version:active.version},
+    digest:source.digest,inventoryDigest:source.inventoryDigest};
+  const backups=await planBackups(lock,{plan:{desired:active}},previous);
+  for(const item of copy.reset.backup.files){
+    const observed=copy.preview.observations.find(o=>o.path===item.source);
+    if(!observed || observed.hash!==item.hash || observed.bytes===null)fail('reset.backup-binding');
+    backups.push({path:item.path,hash:item.hash,existing:false,bytes:Buffer.from(observed.bytes,'base64')});
+  }
+  backups.push({...copy.reset.backup.manifest,existing:false,bytes:resetBackupBytes(copy.reset.backup)});
+  return executeChecked(lock,{prepared:copy,previous,snapshot,backups},approval,
+    ()=>verifyResetApproval(lock,copy,approval,registry),options);
+}
+
 // A new transaction records readback outcomes without changing the old journal.
 // Source/adapter replay was authorized by the original immutable operation;
 // current bytes and exact old evidence require a separate fresh approval here.
@@ -274,7 +301,7 @@ export async function applyContinuation(lock,prepared,approval,options={}) {
     const [{bytes}]=await observeTargets(lock.workspace,[backup.path]);
     backups.push({...backup,bytes,existing:true});
   }
-  const deployment=copy.preview.plan.command==='remove'?previous.active:copy.desired;
+  const deployment=['remove','reset'].includes(copy.preview.plan.command)?previous.active:copy.desired;
   const source=copy.preview.plan.source,snapshot={snapshotPath:resolveChild(lock.workspace,source.path),
     manifest:{id:deployment.pipelineId,version:deployment.version},digest:source.digest,inventoryDigest:source.inventoryDigest};
   return executeChecked(lock,{prepared:copy,previous,snapshot,backups},approval,
@@ -290,20 +317,23 @@ async function verifyContinuationLineage(workspace,prepared,previous) {
   guard.visit(evidence.recoveryPath);
   const old=await readRecord(resolveChild(workspace,evidence.recoveryPath));
   if(old.digest!==evidence.recoveryHash)fail('reconciliation.lineage');
-  const original=old.value.prepared?.kind==='prepared-removal'?validateRemovalRecord(old.value.prepared,old.value.approval):old.value.prepared?.kind==='prepared-continuation'?validateContinuationRecord(old.value.prepared,old.value.approval):old.value.prepared?.kind==='prepared-repair'?validateRepairRecord(old.value.prepared,old.value.approval):validatePreparedRecord(old.value.prepared,old.value.approval);
+  const original=old.value.prepared?.kind==='prepared-reset'?validateResetRecord(old.value.prepared,old.value.approval):old.value.prepared?.kind==='prepared-removal'?validateRemovalRecord(old.value.prepared,old.value.approval):old.value.prepared?.kind==='prepared-continuation'?validateContinuationRecord(old.value.prepared,old.value.approval):old.value.prepared?.kind==='prepared-repair'?validateRepairRecord(old.value.prepared,old.value.approval):validatePreparedRecord(old.value.prepared,old.value.approval);
+  if(contractDigest(prepared.reset??null)!==contractDigest(original.reset??null))fail('reconciliation.lineage');
   const plan=original.preview.plan;
   if(prepared.preview.plan.command!==continuationCommand(plan) ||
       contractDigest(prepared.preview.plan.source)!==contractDigest(plan.source))fail('reconciliation.lineage');
   checkPreview(original.preview,old.value.previous,original.preview.observations.map(o=>({path:o.path,bytes:o.bytes===null?null:Buffer.from(o.bytes,'base64')})));
   const beforeSetup=evidence.statePhase==='before';
-  if(beforeSetup ? (previous!==null || old.value.previous!==null || evidence.stateHash!==null ||
-      original.kind!=='prepared-plan' || original.stateFileHash!==null || plan.command!=='setup') :
+  const beforeReset=beforeSetup && original.kind==='prepared-reset' && plan.command==='reset' && previous?.active &&
+    previous.pending===null && contractDigest(previous)===contractDigest(old.value.previous) && original.stateFileHash===evidence.stateHash;
+  if(beforeSetup ? (!beforeReset && (previous!==null || old.value.previous!==null || evidence.stateHash!==null ||
+      original.kind!=='prepared-plan' || original.stateFileHash!==null || plan.command!=='setup')) :
       (previous?.pending!==contractDigest(plan) || contractDigest(previous?.active)!==contractDigest(old.value.previous?.active??null)))fail('reconciliation.lineage');
   if(contractDigest(prepared.desired)!==contractDigest(plan.desired))fail('reconciliation.lineage');
   const expectedJournal=evidence.recoveryPath.replace('/transactions/','/journals/').replace('/recovery.json','');
   if(evidence.journal!==expectedJournal)fail('reconciliation.lineage');
   const head=await readJournal(workspace,expectedJournal,plan,old.value.previous);
-  if(beforeSetup && (head.nextIndex!==0 || head.pending!==null || head.receipt!==null ||
+  if(beforeSetup && (head.nextIndex!==0 || head.pending!==null || ((!beforeReset || plan.targets.length>0) && head.receipt!==null) ||
       prepared.actions.some(a=>a.action!=='write-desired' || a.recorded!=='skipped')))fail('reconciliation.lineage');
   if(head.sequence!==evidence.journalHead.sequence || head.lastHash!==evidence.journalHead.hash)fail('reconciliation.lineage');
   if(prepared.stateFileHash!==evidence.stateHash || evidence.workspace!==workspace ||
@@ -336,8 +366,9 @@ async function executeChecked(lock,checked,approval,recheck,{boundary=async()=>{
   let prepared,previous;
   prepared=checked.prepared;previous=checked.previous;approval=structuredClone(approval);
   const plan=prepared.preview.plan,digest=contractDigest(plan);
-  const retired=new Set(plan.command==='update'?retiredBundleOwnership(previous,plan.desired).map(o=>o.path):[]);
-  if(plan.targets.some(t=>!['create','replace','edit-fields',...((plan.command==='remove' || retired.has(t.path))?['delete','verify-absent']:[])].includes(t.action)))fail('apply.unsupported-action');
+  const retired=new Set(plan.command==='update'?[...retiredBundleOwnership(previous,plan.desired),
+    ...retiredSkillOwnership(previous,plan.desired)].map(o=>o.path):[]);
+  if(plan.targets.some(t=>!['create','replace','edit-fields',...((['remove','reset'].includes(plan.command) || retired.has(t.path))?['delete','verify-absent']:[])].includes(t.action)))fail('apply.unsupported-action');
   if(plan.targets.some(t=>t.action==='verify-absent' && !readbackOnly.has(t.path)))fail('apply.unsupported-action');
   const pending={schemaVersion:1,workspace:lock.workspace,status:'needs-reconciliation',runtime:'not-run',
     active:previous?.active??null,pending:digest,...(previous?.activation?{activation:structuredClone(previous.activation)}:{})};
@@ -358,6 +389,7 @@ async function executeChecked(lock,checked,approval,recheck,{boundary=async()=>{
   // No contents, secrets or open file handles are passed to it.
   const io=purpose=>(phase,detail)=>ioBoundary({phase,purpose,...detail});
   await boundary('preflight');
+  if(plan.command==='reset')await assertResetTreeScope(lock.workspace,prepared.reset,plan);
   await copySnapshot(lock,checked.snapshot);
   for(const backup of checked.backups)await saveBackup(lock,backup.path,backup.bytes,backup.hash);
   await boundary('backups');
@@ -398,6 +430,7 @@ async function executeChecked(lock,checked,approval,recheck,{boundary=async()=>{
     }
   }
   await boundary('before-active');
+  if(plan.command==='reset')await assertResetTreeScope(lock.workspace,prepared.reset,plan,true);
   const final=await readJournal(lock.workspace,journal.relative,plan,previous);
   if(final.receipt?.status!=='completed')fail('apply.journal-incomplete');
   const expected=new Map(prepared.preview.observations.map(o=>[o.path,o.hash]));

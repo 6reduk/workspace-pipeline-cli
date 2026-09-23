@@ -27,8 +27,8 @@ Preview returns the complete prepared JSON on stdout. It may acquire a Git
 source into temporary storage outside the wrapper, but does not write provider
 configuration. Network acquisition requires explicit `--network`. When manifest
 is omitted, setup uses the standard workspace manifest; update uses the recorded
-manifest origin. Relocation does not silently rebind it. The separate source
-rebind workflow is not exposed by these commands yet.
+manifest origin. Relocation does not silently rebind it. Use the explicit
+[manifest rebind workflow](rebind.md) to change that origin.
 
 Save prepared JSON privately, inspect its operations and then explicitly invoke
 `--apply --preview`. It may contain configuration secrets and absolute local
@@ -41,6 +41,30 @@ existing locked approval, registry, ownership, history, snapshot and drift check
 `--apply` authorizes only that saved prepared subject; no approval is inferred
 from preview generation. Existing local opt-in retention is handled by the
 internal lifecycle coordinator, not a second cleanup pass in the dispatcher.
+
+### Renamed or removed skills during update
+
+For a provider that remains selected, update retires an old managed
+`skills/<name>/SKILL.md` when the new source no longer supplies that path.
+The exact deletion appears in the preview; if installation took over an existing
+file, update restores its verified original backup instead. This supports names
+such as `unity-review` changing to `sdx-review` without leaving duplicate skills.
+
+Only recorded, unchanged native skill entry files qualify. A user edit before
+preview or after approval blocks the operation. User-added files (including notes
+beside a retired skill), other skills, agent definitions, configuration files and
+root instructions are not cleaned up by this rule. Directories are not recursively
+deleted. Provider/bundle removal remains a separate selection operation, except
+for the existing bundle-member update behavior.
+
+This is not a reset or a force-update option. Missing owned files should be
+repaired from the installed snapshot first; conflicting local customizations
+must not be silently discarded. Rebind only approves a new manifest origin;
+it does not relax these ownership checks.
+
+To deliberately discard local adapter customizations, use the separate
+[reset preview/backup/apply workflow](reset.md). Its default is installed-snapshot
+restoration; empty reset must be explicitly selected.
 
 ## Output and failures
 

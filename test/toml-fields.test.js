@@ -1,11 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {reconcileTOMLFields,readTOMLField} from '../src/operations/toml-fields.js';
+import {reconcileTOMLFields,readTOMLField,clearResetTOMLSections,AGENT_CONTROL_KEYS} from '../src/operations/toml-fields.js';
 import {contractDigest} from '../src/contracts/semantic.js';
 const pointer='/agents/unity_review';
 const value={description:'Review docs',config_file:'agents/review.toml'};
 const add=(extra={})=>({pointer,present:true,value,...extra});
 const buf=s=>Buffer.from(s);
+
+test('reset preserves unknown non-table agent settings byte-for-byte and clears named definitions',()=>{
+  for(const nl of ['\n','\r\n']){
+    const prefix=['# personal','[agents]','temperature = 0.5 # keep','custom = "mine"','future = true',
+      'choices = ["a", "b"]','when = 1979-05-27T07:32:00Z','n = nan','big = 9223372036854775807',''].join(nl);
+    const result=clearResetTOMLSections(buf(prefix+'[agents.personal]'+nl+'description="custom"'+nl),['agents']);
+    assert.equal(result.toString(),prefix);
+    assert.deepEqual(clearResetTOMLSections(result,['agents']),result);
+  }
+});
+
+test('one shared agent control list protects ownership and reset including table-valued controls',()=>{
+  assert.ok(Object.isFrozen(AGENT_CONTROL_KEYS));
+  for(const key of AGENT_CONTROL_KEYS){
+    assert.throws(()=>reconcileTOMLFields(null,[{...add(),pointer:'/agents/'+key}]),e=>e.code==='toml.scope');
+    const bytes=buf('[agents.'+key+']\nfuture="keep"\n');
+    assert.deepEqual(clearResetTOMLSections(bytes,['agents']),bytes);
+  }
+});
 
 test('generated multi-entry cycles do not accumulate blank lines and preserve foreign bytes',()=>{
   for(const nl of ['\n','\r\n'])for(const foreign of ['', '# foreign'+nl+'model="mine"'+nl+nl]){

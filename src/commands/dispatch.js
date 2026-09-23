@@ -24,6 +24,8 @@ import {listRepositoryHistory} from '../operations/repository-history.js';
 import {runRepositoryCommand} from './init.js';
 import {parseMigrationCommand,runMigrationCommand} from './migration.js';
 import {parseLaunch,runLaunch} from './launch.js';
+import {parseRebind,runRebind,acceptedRebind} from './rebind.js';
+import {parseReset,runReset} from './reset.js';
 
 export const help=`Workspace Pipeline CLI — development preview
 Usage: workspace-pipeline doctor --workspace <absolute-directory> [--recovery <relative-record>] [--json]
@@ -32,6 +34,11 @@ Usage: workspace-pipeline doctor --workspace <absolute-directory> [--recovery <r
        workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --apply --preview <absolute-json-file>
        workspace-pipeline <setup|update> --workspace <absolute-directory> [--manifest <absolute-file>] [--network]
        workspace-pipeline <setup|update> --workspace <absolute-directory> --apply --preview <absolute-json-file>
+       workspace-pipeline rebind --workspace <absolute-directory> --manifest <absolute-file>
+       workspace-pipeline update --workspace <absolute-directory> --accept-rebind <absolute-json-file> [--network]
+       workspace-pipeline reset --workspace <absolute-directory> --all [--to installed|empty]
+       workspace-pipeline reset --workspace <absolute-directory> [--providers <ids>] [--bundles <ids>] [--to installed|empty]
+       workspace-pipeline reset --workspace <absolute-directory> --apply --preview <absolute-json-file>
        workspace-pipeline <repair|remove> --workspace <absolute-directory> [--providers <comma-separated-ids>] [--bundles <comma-separated-ids>]
        workspace-pipeline <repair|remove> --workspace <absolute-directory> --apply --preview <absolute-json-file>
        workspace-pipeline switch --workspace <absolute-directory> --manifest <absolute-file> [--network]
@@ -79,6 +86,11 @@ select a new source/manifest or download a replacement for missing staged data.
 No native plugins are installed. Source packages cannot supply executable adapters.
 Repair/remove are offline installed-snapshot operations. --providers and --bundles are remove-only,
 preview-only; omission previews full removal. No automatic history cleanup on these commands.
+Reset is separate and destructive within its explicit local configuration scope,
+including user additions: default --to installed, --to empty explicit. Selection
+is mandatory. Preview first; apply backs up affected bytes before target writes.
+No repository/global/auth/model/permissions cleanup. Malformed configuration fails
+closed. Recovery uses the existing continue command; backups remain local/private.
 Switch requires an explicit incoming manifest in preview, preserves two separate
 phases and activates only after both pass. Failure is not rolled back or retried.
 Continue creates a new approved operation from pending evidence; it does not replay old journals.
@@ -131,6 +143,8 @@ export function parseCommand(args) {
   if(!Array.isArray(args) || args.some(a=>typeof a!=='string')) fail('cli.arguments');
   if(args.length===0 || (args.length===1 && ['--help','-h'].includes(args[0])))return {command:'help'};
   if(args[0]==='launch')return parseLaunch(args);
+  if(args[0]==='rebind')return parseRebind(args);
+  if(args[0]==='reset')return parseReset(args);
   if(['setup','update','repair','remove','switch','continue'].includes(args[0]))return parseLifecycle(args);
   if(args[0]==='migration')return parseMigrationCommand(args);
   if(['init','adopt','wrap'].includes(args[0]))return parseRepositories(args);
@@ -214,7 +228,7 @@ function parseLifecycle(args) {
   const result={command:args[0]},seen=new Set(),maintenance=['repair','remove'].includes(args[0]);
   for(let i=1;i<args.length;i++) {
     const flag=args[i];
-    const allowed=['--workspace','--apply','--preview','--json',...(result.command==='continue'?['--recovery']:maintenance?result.command==='remove'?['--providers','--bundles']:[]:['--manifest','--network'])];
+    const allowed=['--workspace','--apply','--preview','--json',...(result.command==='update'?['--accept-rebind']:[]),...(result.command==='continue'?['--recovery']:maintenance?result.command==='remove'?['--providers','--bundles']:[]:['--manifest','--network'])];
     if(!allowed.includes(flag) || seen.has(flag))fail('cli.arguments');
     seen.add(flag);
     if(flag==='--json')continue;
@@ -235,9 +249,10 @@ function parseLifecycle(args) {
       if(providers.some(p=>!['codex','claude','kimi','grok'].includes(p)) || new Set(providers).size!==providers.length)fail('cli.arguments');
       result.providers=providers.sort();continue;
     }
-    result[{'--workspace':'workspace','--manifest':'manifestPath','--preview':'previewFile'}[flag]]=absoluteRoot(value);
+    result[{'--workspace':'workspace','--manifest':'manifestPath','--preview':'previewFile','--accept-rebind':'rebindFile'}[flag]]=absoluteRoot(value);
   }
   if(!result.workspace)fail('cli.workspace-required');
+  if(result.rebindFile && (result.apply || result.manifestPath))fail('cli.arguments');
     if(result.apply?(!result.previewFile || result.manifestPath || result.network || result.providers || result.bundles):result.previewFile)fail('cli.arguments');
   if(result.command==='switch' && !result.apply && !result.manifestPath)fail('switch.manifest-required');
   if(result.command==='continue' && (result.apply?result.recoveryPath:!result.recoveryPath))fail('continuation.recovery-required');
@@ -259,6 +274,7 @@ async function runLifecycle(command,registry,stdout,stderr) {
     if(command.providers)input.providers=command.providers;
     if(command.bundles)input.bundles=command.bundles;
     if(command.recoveryPath)input.recoveryPath=command.recoveryPath;
+    if(command.rebindFile)Object.assign(input,await acceptedRebind(command.workspace,command.rebindFile));
     await stdout(JSON.stringify(await prepare(input,registry))+'\n');return 0;
   }
   const prepared=(await readRecord(command.previewFile)).value;
@@ -374,6 +390,8 @@ export async function runCli(args,{stdout,stderr,registry=null}) {
     const command=parseCommand(args);
     if(command.command==='help') {await stdout(help+'\n');return 0;}
     if(command.command==='launch')return await runLaunch(command,stdout,stderr);
+    if(command.command==='rebind')return await runRebind(command,stdout);
+    if(command.command==='reset')return await runReset(command,registry,stdout,stderr);
     if(command.command==='migration')return await runMigrationCommand(command,stdout,stderr);
     if(command.command==='logs')return await runLogs(command,stdout,stderr);
     if(command.command==='policy')return await runPolicy(command,stdout);

@@ -25,7 +25,7 @@ function at(root,pointer) {
 // Read-only inspection, NOT a prepared repair/apply envelope. All requests are
 // replayed from installed bytes by trusted adapters; owned value hashes must
 // match state. User changes become conflicts, never rewritten ownership records.
-async function observeRepair(workspace,registry) {
+export async function observeRepair(workspace,registry) {
   requestShape(registry,['adapters','sharedAdapter'],[],'provider.interface');
   if(!registry.adapters || typeof registry.adapters!=='object' || Array.isArray(registry.adapters) ||
       typeof registry.sharedAdapter?.plan!=='function')fail('provider.interface');
@@ -96,7 +96,7 @@ async function observeRepair(workspace,registry) {
     if(hash(observation.bytes)!==hash(current.get(observation.path)))fail('repair.observation-drift');
   const body={kind:'repair-inspection',workspace,stateHash:record.digest,snapshot:active.snapshot.digest,entries,
     runtime:'not-run',automaticActions:false,applySupported:false,requiresFreshApproval:true};
-  return {inspection:{...body,digest:contractDigest(body)},current,desired};
+  return {inspection:{...body,digest:contractDigest(body)},current,desired,requests};
 }
 
 export async function inspectRepair(workspace,registry) {

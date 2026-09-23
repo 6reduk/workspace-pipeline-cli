@@ -23,6 +23,7 @@
             "update",
             "repair",
             "remove",
+            "reset",
             "switch"
           ]
         },

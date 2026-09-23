@@ -12,6 +12,7 @@ import { acquire } from '../source/git.js';
 import { readState, resolveOrigin, resolveApprovedRebind, verifyPreparedSnapshot, observeTargets } from './state.js';
 import { commonEntryPath, commonEntryText, needsCommonEntry } from '../providers/common-entry.js';
 import {planObservationPaths,retiredBundleOwnership,restoreRetired} from './bundle-update.js';
+import {retiredSkillOwnership} from './skill-retirement.js';
 
 // Trusted CLI destination policy, not a claim about tested harness discovery.
 const roots = {shared:['AGENTS.md','CLAUDE.md'],codex:['.codex/','.agents/skills/'],
@@ -193,7 +194,8 @@ export function composePlan({pipeline, workspace, wrapper, previous = null, snap
     }
   }
   // Removal/provider switch is S7. Never silently abandon existing ownership.
-  for(const restored of restoreRetired(retiredBundleOwnership(previous,layout),observed)) {
+  for(const restored of restoreRetired([...retiredBundleOwnership(previous,layout),
+    ...retiredSkillOwnership(previous,layout,ordered)],observed)) {
     if([...used].some(name=>overlaps(name,restored.path)))fail('plan.overlap');
     // Retirement cannot reach a newly selected repository destination.
     planLayout(pipeline,workspace,wrapper,{adapters,managedPaths:[...used,restored.path]});

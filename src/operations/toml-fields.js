@@ -4,14 +4,16 @@ import {fail, MAX_INPUT_BYTES} from '../contracts/parse.js';
 import {utf8} from '../source/inventory.js';
 import {reconcileFields,requestShape} from './ownership.js';
 
+export const AGENT_CONTROL_KEYS=Object.freeze(['enabled','max_threads','max_depth','max_concurrent_threads_per_session',
+  'default_subagent_model','default_subagent_reasoning_effort','job_max_runtime_seconds','interrupt_message']);
+
 // Only complete named Codex agent/MCP entries. No model, permission, auth or
 // trust setting may be addressed through this editor. No I/O or authorization.
 function parts(pointer) {
   if(typeof pointer!=='string' || !/^\/(agents|mcp_servers)\/[a-z][a-z0-9_-]{0,99}$/.test(pointer))fail('toml.scope');
   const result=pointer.slice(1).split('/');
   if(['__proto__','prototype','constructor'].includes(result[1]))fail('toml.scope');
-  if(result[0]==='agents' && ['enabled','max_threads','max_depth','max_concurrent_threads_per_session',
-    'default_subagent_model','default_subagent_reasoning_effort','job_max_runtime_seconds','interrupt_message'].includes(result[1]))fail('toml.scope');
+  if(result[0]==='agents' && AGENT_CONTROL_KEYS.includes(result[1]))fail('toml.scope');
   return result;
 }
 const prefix=(a,b)=>a.length<=b.length && a.every((x,i)=>x===b[i]);
@@ -92,6 +94,37 @@ function deletionRanges(ast,target) {
 function normalizeEmptyRoots(value) {
   for(const root of ['agents','mcp_servers'])if(value[root] && !Array.isArray(value[root]) && Object.keys(value[root]).length===0)delete value[root];
   return value;
+}
+
+// Reset-only editor: never widen the ordinary ownership editor's pointer scope.
+// Keep agent runtime/model controls; clear named definitions and MCP declarations.
+export function clearResetTOMLSections(bytes,roots) {
+  if(!Array.isArray(roots) || roots.some(r=>!['agents','mcp_servers'].includes(r)))fail('toml.scope');
+  if(bytes===null)return null;
+  const before=document(bytes),expected=structuredClone(before.value),ranges=[];
+  for(const root of roots){
+    if(!Object.hasOwn(before.value,root))continue;
+    if(root==='agents'){
+      const entries=before.value[root];
+      if(!entries || typeof entries!=='object' || Array.isArray(entries) || entries instanceof Date)fail('toml.ancestor');
+      for(const name of Object.keys(entries).filter(n=>!AGENT_CONTROL_KEYS.includes(n))){
+        // Unknown non-table settings are not named agent definitions. Preserve
+        // their original bytes rather than guessing future harness controls.
+        const entry=entries[name];
+        if(!entry || typeof entry!=='object' || Array.isArray(entry) || entry instanceof Date)continue;
+        ranges.push(...deletionRanges(before.ast,[root,name]));delete expected[root][name];
+      }
+    }else{ranges.push(...deletionRanges(before.ast,[root]));delete expected[root];}
+  }
+  let result=before.text;
+  const ordered=ranges.map(([s,e])=>[s,e+(before.text.startsWith('\r\n',e)?2:before.text[e]==='\n'?1:0)]).sort((a,b)=>b[0]-a[0]);
+  for(let i=0;i<ordered.length;i++){
+    const [s,e]=ordered[i];if(i && e>ordered[i-1][0])fail('toml.overlap');
+    result=result.slice(0,s)+result.slice(e);
+  }
+  const output=Buffer.from(result);
+  if(!isDeepStrictEqual(normalizeEmptyRoots(document(output).value),normalizeEmptyRoots(expected)))fail('toml.postcondition');
+  return output;
 }
 
 export function reconcileTOMLFields(bytes,requests) {

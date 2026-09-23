@@ -8,8 +8,10 @@ import {assertLockHeld} from './lock.js';
 import {bindPreview} from './plan.js';
 import {assertContinuationCapacity} from './lineage-guard.js';
 import {retiredBundleOwnership} from './bundle-update.js';
+import {retiredSkillOwnership} from './skill-retirement.js';
+import {assertResetTreeScope} from './reset-scope.js';
 
-export const continuationCommand=plan=>plan.command==='remove'?'remove':
+export const continuationCommand=plan=>['remove','reset'].includes(plan.command)?plan.command:
   plan.command==='update' && plan.targets.some(t=>t.desiredHash===null)?'update':'repair';
 
 // Current evidence and decisions still required, never a runnable retry/rollback.
@@ -42,13 +44,17 @@ export async function prepareContinuation(workspace,recoveryPath) {
   if(record.digest!==evidence.recoveryHash)fail('recovery.observation-drift');
   const previousPlan=record.value.prepared.preview,actions=[];
   const beforeSetup=evidence.statePhase==='before';
-  if(beforeSetup && (evidence.stateHash!==null || record.value.previous!==null ||
+  const beforeReset=beforeSetup && record.value.prepared.kind==='prepared-reset' && previousPlan.plan.command==='reset' &&
+    record.value.previous?.active && record.value.previous.pending===null && record.value.prepared.stateFileHash===evidence.stateHash;
+  if(beforeSetup && !beforeReset && (evidence.stateHash!==null || record.value.previous!==null ||
       record.value.prepared.kind!=='prepared-plan' || record.value.prepared.stateFileHash!==null ||
       previousPlan.plan.command!=='setup'))fail('reconciliation.not-pending');
-  if(beforeSetup && ((await inspectRecovery(workspace,recoveryPath)).receipt!==null ||
+  if(beforeSetup && ((!beforeReset || previousPlan.plan.targets.length>0) && (await inspectRecovery(workspace,recoveryPath)).receipt!==null ||
       evidence.targets.some(t=>t.position!=='before' || t.recorded!=='skipped')))fail('reconciliation.conflict');
-  const removal=previousPlan.plan.command==='remove';
-  const retired=new Set(retiredBundleOwnership(record.value.previous,previousPlan.plan.desired??{}).map(o=>o.path));
+  const removal=['remove','reset'].includes(previousPlan.plan.command);
+  if(previousPlan.plan.command==='reset')await assertResetTreeScope(workspace,record.value.prepared.reset,previousPlan.plan);
+  const retired=new Set([...retiredBundleOwnership(record.value.previous,previousPlan.plan.desired??{}),
+    ...(previousPlan.plan.command==='update'?retiredSkillOwnership(record.value.previous,previousPlan.plan.desired):[])].map(o=>o.path));
   assertContinuationCapacity(evidence.lineage.length);
   for(const target of previousPlan.plan.targets) {
     const observed=evidence.targets.find(t=>t.id===target.id);
@@ -78,6 +84,7 @@ export async function prepareContinuation(workspace,recoveryPath) {
       action:continuationTargetAction(a),beforeHash:a.beforeHash,desiredHash:a.desiredHash,fields:[]}))};
   const preview=bindPreview(plan,state?.value??null,{observations,outputs});
   const body={kind:'prepared-continuation',evidence,actions,preview,stateFileHash:evidence.stateHash,
+    ...(previousPlan.plan.command==='reset'?{reset:structuredClone(record.value.prepared.reset)}:{}),
     dependencies:previousPlan.observations.filter(o=>!actions.some(a=>a.path===o.path)),
     desired:structuredClone(previousPlan.plan.desired),
     applySupported:true,requiresFreshApproval:true,automaticActions:false,runtime:'not-run'};
@@ -91,13 +98,14 @@ export function continuationTargetAction(action) {
 }
 
 export function validateContinuationRecord(prepared,approval) {
-  requestShape(prepared,['kind','evidence','actions','preview','stateFileHash','dependencies','desired','applySupported','requiresFreshApproval','automaticActions','runtime','digest'],[],'reconciliation.prepared');
+  requestShape(prepared,['kind','evidence','actions','preview','stateFileHash','dependencies','desired','applySupported','requiresFreshApproval','automaticActions','runtime','digest'],['reset'],'reconciliation.prepared');
   requestShape(approval,['decision','preparedDigest'],[],'reconciliation.approval');
   const copy=structuredClone(parse(JSON.stringify(prepared),'json')),decision=structuredClone(approval);
   const {digest,...body}=copy;
   if(copy.kind!=='prepared-continuation' || copy.applySupported!==true || copy.requiresFreshApproval!==true ||
       copy.automaticActions!==false || copy.runtime!=='not-run' || contractDigest(body)!==digest)fail('reconciliation.prepared');
   if(decision.decision!=='approve' || decision.preparedDigest!==digest)fail('reconciliation.approval');
+  if((copy.preview?.plan?.command==='reset')!==Object.hasOwn(copy,'reset'))fail('reconciliation.prepared');
   return copy;
 }
 

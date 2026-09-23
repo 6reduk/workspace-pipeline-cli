@@ -2,6 +2,7 @@ import { fail } from '../contracts/parse.js';
 import { contractDigest } from '../contracts/semantic.js';
 import { sha256 } from '../source/inventory.js';
 import { readConfigField, reconcileConfigFields } from './config-fields.js';
+import {retiredSkillOwnership} from './skill-retirement.js';
 
 // Only a member removed from a still-selected bundle may retire during update.
 // Standalone removal and removal of an entire bundle remain explicit operations.
@@ -14,7 +15,7 @@ export function retiredBundleOwnership(previous, selection) {
   return (previous?.active?.owned??[]).filter(o=>owners.has(o.owner));
 }
 export function planObservationPaths(requests, previous, selection) {
-  const retired=retiredBundleOwnership(previous,selection);
+  const retired=[...retiredBundleOwnership(previous,selection),...retiredSkillOwnership(previous,selection,requests)];
   return [...new Set([...requests.map(r=>r.path),...retired.flatMap(o=>[o.path,...(o.backup?[o.backup]:[])])])].sort();
 }
 export function restoreRetired(entries, observations) {

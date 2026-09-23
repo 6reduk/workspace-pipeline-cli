@@ -1,7 +1,7 @@
 // Run via npm run test:packed:providers. Installs only into a fresh Temp prefix.
 import assert from 'node:assert/strict';
 import {execFileSync,spawnSync} from 'node:child_process';
-import {mkdtemp,mkdir,readFile,writeFile,readdir,rename} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,writeFile,readdir,rename,unlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -70,8 +70,58 @@ try{
   const launch=run(['launch','grok','--workspace',a,'--executable',process.execPath]);
   assert.equal(launch.runtime,'not-run');assert.equal(launch.environmentOverrides.GROK_CLAUDE_SKILLS_ENABLED,'false');
   for(const location of ['.agents','.claude','.kimi-code','.grok'])assert.ok((await readFile(path.join(a,location,'skills/fixture-review/SKILL.md'))).length);
+  // A source rename must retire only installed SKILL.md bytes, not user additions.
+  const oldSource='skills/fixture-review/SKILL.md',newSource='skills/sdx-review/SKILL.md';
+  files[newSource]=files[oldSource].replace('name: fixture-review','name: sdx-review');
+  delete files[oldSource];await unlink(path.join(source,oldSource));
+  await mkdir(path.dirname(path.join(source,newSource)),{recursive:true});
+  await writeFile(path.join(source,newSource),files[newSource]);
+  await writeFile(path.join(source,'inventory.json'),JSON.stringify(Object.fromEntries(Object.entries(files).map(([p,t])=>[p,hash(Buffer.from(t))]))));
+  for(const args of [['add','--all'],['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','rename fixture skill']]){
+    const result=spawnSync('git',['-C',source,'-c','core.hooksPath=/dev/null','-c','commit.gpgsign=false',...args],{env,windowsHide:true,encoding:'utf8'});
+    assert.equal(result.status,0,result.stderr);
+  }
+  const userNote=path.join(a,'.agents/skills/fixture-review/notes.md');await writeFile(userNote,'keep personal notes');
   assert.equal((await apply('update')).status,'ready');
-  const skill=path.join(a,'.grok/skills/fixture-review/SKILL.md'),original=await readFile(skill);
+  for(const location of ['.agents','.claude','.kimi-code','.grok']){
+    await assert.rejects(readFile(path.join(a,location,'skills/fixture-review/SKILL.md')),e=>e.code==='ENOENT');
+    assert.ok((await readFile(path.join(a,location,'skills/sdx-review/SKILL.md'))).length);
+  }
+  assert.equal(await readFile(userNote,'utf8'),'keep personal notes');
+  report.checks.push({name:'skill-rename-all-providers',userAdditionsPreserved:true});
+  // Public packed CLI rebind: acquisition consent is not file-apply consent.
+  const rebound=path.join(a,'workspace-rebound.json');
+  await writeFile(rebound,JSON.stringify(workspace));
+  const beforeRebind=await readFile(path.join(a,'.pipeline/state.json'));
+  assert.equal(run(['update','--workspace',a,'--manifest',rebound],2).error,'source-rebind-required');
+  const rebind=run(['rebind','--workspace',a,'--manifest',rebound]);
+  assert.equal(rebind.sourceAccessAuthorized,false);
+  const rebindFile=path.join(root,'rebind.json');await writeFile(rebindFile,JSON.stringify(rebind));
+  const reboundUpdate=run(['update','--workspace',a,'--accept-rebind',rebindFile]);
+  assert.deepEqual(await readFile(path.join(a,'.pipeline/state.json')),beforeRebind);
+  const reboundPreview=path.join(root,'rebind-update.json');await writeFile(reboundPreview,JSON.stringify(reboundUpdate));
+  assert.equal(run(['update','--workspace',a,'--apply','--preview',reboundPreview]).status,'ready');
+  assert.equal(JSON.parse(await readFile(path.join(a,'.pipeline/state.json'),'utf8')).active.snapshot.origin.path,rebound);
+  report.checks.push({name:'public-rebind',status:'ready',separateApply:true});
+  // Offline reset from installed bytes, with deliberate customization loss.
+  const resetSkill=path.join(a,'.grok/skills/sdx-review/SKILL.md'),suppliedSkill=await readFile(resetSkill);
+  await writeFile(resetSkill,'personal tuning');
+  const resetPreview=run(['reset','--workspace',a,'--providers','grok'],2);
+  assert.equal(resetPreview.error,'remove.bundle-required');
+  const approvedReset=run(['reset','--workspace',a,'--bundles','pair']);
+  assert.equal(approvedReset.reset.selection.to,'installed');
+  const resetFile=path.join(root,'reset.json');await writeFile(resetFile,JSON.stringify(approvedReset));
+  assert.equal(run(['reset','--workspace',a,'--apply','--preview',resetFile]).status,'ready');
+  assert.deepEqual(await readFile(resetSkill),suppliedSkill);
+  for(const item of approvedReset.reset.backup.files)assert.equal(hash(await readFile(path.join(a,item.path))),item.hash);
+  assert.equal(hash(await readFile(path.join(a,approvedReset.reset.backup.manifest.path))),approvedReset.reset.backup.manifest.hash);
+  report.checks.push({name:'reset-installed-bundle',backupsVerified:true});
+  // MCP declarations in the explicitly reset bundle are deliberately cleared;
+  // unrelated model settings remain. Removal does not resurrect pre-reset MCPs.
+  const grokAfterReset=await readFile(path.join(a,'.grok/config.toml'),'utf8');
+  assert.ok(grokAfterReset.includes('default="personal"'));
+  assert.ok(!grokAfterReset.includes('grok-personal'));
+  const skill=path.join(a,'.grok/skills/sdx-review/SKILL.md'),original=await readFile(skill);
   await rename(skill,path.join(root,'saved-skill.md'));
   await apply('repair');assert.deepEqual(await readFile(skill),original);
   assert.equal(run(['remove','--workspace',a,'--providers','claude'],2).error,'remove.bundle-required');
@@ -79,18 +129,19 @@ try{
   assert.equal(run(['doctor','--workspace',a]).ready,true);
   await apply('remove',['--bundles','pair']);
   await assert.rejects(readFile(path.join(a,'CLAUDE.md')),e=>e.code==='ENOENT');
-  assert.equal(await readFile(path.join(a,'.grok/config.toml'),'utf8'),grokForeign);
-  assert.ok((await readFile(path.join(a,'.kimi-code/skills/fixture-review/SKILL.md'))).length);
+  assert.ok((await readFile(path.join(a,'.grok/config.toml'),'utf8')).includes('default="personal"'));
+  assert.ok(!(await readFile(path.join(a,'.grok/config.toml'),'utf8')).includes('grok-personal'));
+  assert.ok((await readFile(path.join(a,'.kimi-code/skills/sdx-review/SKILL.md'))).length);
   await apply('remove',['--providers','kimi']);
   assert.deepEqual(JSON.parse(await readFile(path.join(a,'.kimi-code/mcp.json'),'utf8')),JSON.parse(kimiForeign));
-  assert.ok((await readFile(path.join(a,'.agents/skills/fixture-review/SKILL.md'))).length);
+  assert.ok((await readFile(path.join(a,'.agents/skills/sdx-review/SKILL.md'))).length);
   assert.equal(run(['doctor','--workspace',a]).ready,true);
   assert.ok((await readFile(path.join(a,'AGENTS.md'))).length);
   await apply('remove');
   assert.ok((await readFile(path.join(a,'.codex/config.toml'),'utf8')).startsWith(foreign));
-  assert.deepEqual(JSON.parse(await readFile(path.join(a,'.mcp.json'),'utf8')),{mcpServers:{foreign:{command:'personal'}}});
+  assert.deepEqual(JSON.parse(await readFile(path.join(a,'.mcp.json'),'utf8')),{mcpServers:{}});
   await assert.rejects(readFile(path.join(a,'AGENTS.md')),e=>e.code==='ENOENT');
   assert.deepEqual(await readdir(b),[]);
-  report.checks.push({name:'foreign-config-and-sibling-preserved'});report.status='pass';
+  report.checks.push({name:'unselected-config-and-sibling-preserved',resetDeclarations:'discarded-as-approved'});report.status='pass';
 }catch(error){report.status='fail';report.error={name:error.name,message:error.message};throw error;}
 finally{await writeFile(path.join(root,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));}

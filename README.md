@@ -10,6 +10,11 @@ observed in disposable sessions. Kimi native verification is deferred; its
 configuration renderer remains experimental. Real-project migration requires an
 explicit preview and approval; installation is not blanket runtime certification.
 
+Version 0.3.0 adds [rebind](docs/rebind.md) (explicit
+manifest/source binding changes) and [reset](docs/reset.md) (backed-up restoration
+or clearing of selected local adapter configuration). Both require a separate
+preview and explicit apply for changes; these commands are not in registry 0.2.0.
+
 Grok's Claude-import suppression requires the [scoped launch command](docs/launch.md).
 File installation does not establish native session discovery or runtime isolation;
 Kimi/Grok checks and known generic-skill discovery limits are documented in

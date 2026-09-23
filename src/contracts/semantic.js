@@ -5,6 +5,7 @@ import { fail } from './parse.js';
 import { validateStructure } from './validate.js';
 import { requiredCapabilities, assertAdapter } from '../providers/interface.js';
 import { resolveProviders, validateInstalledBundles } from '../providers/bundles.js';
+import {retiredSkillOwnership} from '../operations/skill-retirement.js';
 
 const has = (o, k) => Object.hasOwn(o, k);
 export function portablePath(value) {
@@ -173,7 +174,8 @@ export function validateOperation(op, previous) {
         o.path===t.path && o.owner===t.owner && o.kind==='file') &&
         Object.entries(previous.active.bundles??{}).some(([id,b])=>op.desired?.bundles?.[id] &&
           b.providers.includes(t.owner) && !op.desired.providers.includes(t.owner));
-      if (t.action === 'verify-absent' && ((op.command !== 'remove' && !retiredBundleFile) || t.beforeHash !== null || t.desiredHash !== null)) fail('operation.hash');
+      const retiredSkillFile=op.command==='update' && retiredSkillOwnership(previous,op.desired).some(o=>o.path===t.path && o.owner===t.owner);
+      if (t.action === 'verify-absent' && ((!['remove','reset'].includes(op.command) && !retiredBundleFile && !retiredSkillFile) || t.beforeHash !== null || t.desiredHash !== null)) fail('operation.hash');
       if (['replace', 'edit-fields'].includes(t.action) && (t.beforeHash === null || t.desiredHash === null)) fail('operation.hash');
       if ((t.action === 'edit-fields') !== (t.fields.length > 0)) fail('operation.fields');
       const fieldPointers = [];
