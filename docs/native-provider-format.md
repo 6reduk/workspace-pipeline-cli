@@ -127,6 +127,9 @@ owned routes therefore does not prove that harness can no longer discover a
 pipeline still installed for another provider. Installer ownership isolation and
 native discovery are distinct checks.
 
+The following describes legacy native-Grok delivery, not the new
+[Claude-only compatibility mode](claude-grok.md), which installs no Grok copies.
+
 Grok's child-environment helper sets five Claude compatibility switches to false:
 skills, rules, agents, MCP and hooks. It changes only the child environment,
 including removal of conflicting Windows key spellings. It does not switch

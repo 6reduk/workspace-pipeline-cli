@@ -6,6 +6,7 @@ import {applyReset} from '../operations/apply.js';
 import {acquireWorkspaceLock} from '../operations/lock.js';
 import {inspectHistory} from '../operations/history.js';
 import {assertNoRepositoryPending} from '../operations/repository-pending.js';
+import {bindCompatibility,unwrapCompatibility,finishCompatibility} from '../compat/lifecycle.js';
 
 export function parseReset(args){
   const result={command:'reset'},seen=new Set();
@@ -35,12 +36,13 @@ async function history(workspace){
   await assertNoRepositoryPending(workspace);
   const h=await inspectHistory(workspace);if(!h.complete || h.diagnostics.length)fail('reset.history');
 }
-export async function runReset(command,registry,stdout,stderr){
+export async function runReset(command,registry,stdout,stderr,compatibility=null){
   if(!command.apply){
     await history(command.workspace);
-    await stdout(JSON.stringify(await prepareReset(command.workspace,registry,command.options))+'\n');return 0;
+    await stdout(JSON.stringify(await bindCompatibility(await prepareReset(command.workspace,registry,command.options),compatibility))+'\n');return 0;
   }
-  const raw=(await readRecord(command.previewFile)).value;
+  const unwrapped=await unwrapCompatibility((await readRecord(command.previewFile)).value,compatibility);
+  const raw=unwrapped.prepared;
   const approval={decision:'approve',preparedDigest:raw.digest};
   const prepared=validateResetRecord(raw,approval);
   if(prepared.preview.plan.workspace!==command.workspace)fail('reset.workspace');
@@ -59,6 +61,7 @@ export async function runReset(command,registry,stdout,stderr){
     result.status=applied.status;
   }catch(error){result.error=error instanceof ContractError?error.code:'reset.io';}
   finally{if(lock)try{await lock.release();result.lockRelease='released';}catch{result.lockRelease='failed';}}
-  await stdout(JSON.stringify(result)+'\n');
-  return ['ready','not-installed'].includes(result.status) && result.lockRelease==='released'?0:1;
+  const final=await finishCompatibility(result,unwrapped.compatibility,compatibility);
+  await stdout(JSON.stringify(final)+'\n');
+  return ['ready','not-installed'].includes(final.status) && final.lockRelease==='released'?0:1;
 }

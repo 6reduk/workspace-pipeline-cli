@@ -1,11 +1,15 @@
 # Workspace Pipeline CLI
 
+Claude/Grok shared delivery: [one Claude configuration, plain Grok launch,
+global compatibility preview and recovery](docs/claude-grok.md).
+
 `@6reduk/workspace-pipeline` — workspace-local pipeline delivery. Licensed under MIT.
 
 **`--help`, read-only `doctor`, and `logs list/clean/policy` are implemented.**
 Setup/update/repair/remove/switch/continue use compiled workspace-local adapters
-for Codex, Claude, Kimi and Grok. No native plugin installation
-or global activation is performed. Claude/Grok shared-entry and skill routing were
+for Codex, Claude, Kimi and legacy native Grok. No native plugin installation
+is performed. Claude-only delivery additionally offers an explicitly approved
+user-wide Grok compatibility prerequisite. Claude/Grok shared-entry and skill routing were
 observed in disposable sessions. Kimi native verification is deferred; its
 configuration renderer remains experimental. Real-project migration requires an
 explicit preview and approval; installation is not blanket runtime certification.
@@ -15,7 +19,8 @@ manifest/source binding changes) and [reset](docs/reset.md) (backed-up restorati
 or clearing of selected local adapter configuration). Both require a separate
 preview and explicit apply for changes; these commands are not in registry 0.2.0.
 
-Grok's Claude-import suppression requires the [scoped launch command](docs/launch.md).
+Legacy native Grok's Claude-import suppression uses the [scoped launch command](docs/launch.md).
+New Claude-only delivery uses plain `grok` and deliberately enables those imports.
 File installation does not establish native session discovery or runtime isolation;
 Kimi/Grok checks and known generic-skill discovery limits are documented in
 [native component formats](docs/native-provider-format.md).

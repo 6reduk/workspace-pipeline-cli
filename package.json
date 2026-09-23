@@ -1,6 +1,6 @@
 {
   "name": "@6reduk/workspace-pipeline",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Workspace-local Git pipeline configuration dispatcher",
   "type": "module",
   "bin": {
@@ -26,6 +26,7 @@
     "test:packed": "node scripts/verify-packed-cli.mjs",
     "test:packed:identity": "node scripts/verify-packed-identity.mjs",
     "test:packed:providers": "node scripts/verify-packed-providers.mjs",
+    "test:packed:claude-compat": "node scripts/verify-packed-claude-compat.mjs",
     "test:packed:pilot": "node scripts/verify-packed-pilot.mjs"
   },
   "dependencies": {

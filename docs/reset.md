@@ -55,7 +55,10 @@ Non-control table entries under `[agents]` are treated as named agent definition
 Unknown files outside the listed trees are not guessed to be pipeline files.
 Files under listed trees are included regardless of ignore rules. Empty directories
 and empty containing configuration files may remain; they are not an active skill
-or MCP declaration. Grok still uses its scoped launcher for import suppression.
+or MCP declaration. Legacy native Grok uses its scoped launcher; new Claude-only
+delivery uses [plain Grok and a separate compatibility prerequisite](claude-grok.md).
+Reset-to-installed may explicitly reapply that prerequisite; reset-to-empty and
+removal never disable user-wide compatibility.
 
 Malformed configurations, unsupported TOML representations, unsafe paths/links,
 hardlinks, repository overlap, unavailable snapshots, incompatible renderer replay,

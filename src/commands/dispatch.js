@@ -26,9 +26,12 @@ import {parseMigrationCommand,runMigrationCommand} from './migration.js';
 import {parseLaunch,runLaunch} from './launch.js';
 import {parseRebind,runRebind,acceptedRebind} from './rebind.js';
 import {parseReset,runReset} from './reset.js';
+import {bindCompatibility,unwrapCompatibility,finishCompatibility,doctorCompatibility} from '../compat/lifecycle.js';
+import {parseCompat,runCompat} from './compat.js';
 
 export const help=`Workspace Pipeline CLI — development preview
 Usage: workspace-pipeline doctor --workspace <absolute-directory> [--recovery <relative-record>] [--json]
+       workspace-pipeline compat claude [recover-lock] [--apply --preview <absolute-json-file>] [--json]
        workspace-pipeline launch grok --workspace <absolute-directory> --executable <absolute-native-executable> [--inspect] [--execute]
        workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --choices <absolute-json-file> [--manifest <absolute-file>] [--network]
        workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --apply --preview <absolute-json-file>
@@ -145,6 +148,7 @@ export function parseCommand(args) {
   if(!Array.isArray(args) || args.some(a=>typeof a!=='string')) fail('cli.arguments');
   if(args.length===0 || (['--help','-h'].includes(args[0]) && (args.length===1 || (args.length===2 && args[1]==='--json'))))return {command:'help'};
   if(args[0]==='launch')return parseLaunch(args);
+  if(args[0]==='compat')return parseCompat(args);
   if(args[0]==='rebind')return parseRebind(args);
   if(args[0]==='reset')return parseReset(args);
   if(['setup','update','repair','remove','switch','continue'].includes(args[0]))return parseLifecycle(args);
@@ -261,7 +265,7 @@ function parseLifecycle(args) {
   return result;
 }
 
-async function runLifecycle(command,registry,stdout,stderr) {
+async function runLifecycle(command,registry,stdout,stderr,compatibility) {
   // A trusted embedding/CLI assembly can supply functions; argv and package
   // data cannot. Until real adapters ship, the default command fails before IO.
   if(registry===null || registry===undefined)fail('cli.providers-unavailable');
@@ -277,12 +281,22 @@ async function runLifecycle(command,registry,stdout,stderr) {
     if(command.bundles)input.bundles=command.bundles;
     if(command.recoveryPath)input.recoveryPath=command.recoveryPath;
     if(command.rebindFile)Object.assign(input,await acceptedRebind(command.workspace,command.rebindFile));
-    await stdout(JSON.stringify(await prepare(input,registry))+'\n');return 0;
+    const prepared=await prepare(input,registry);
+    await stdout(JSON.stringify(command.command==='remove'?prepared:await bindCompatibility(prepared,compatibility))+'\n');return 0;
   }
-  const prepared=(await readRecord(command.previewFile)).value;
-  const result=await apply({command:command.command,wrapper:command.workspace,prepared,
+  const saved=(await readRecord(command.previewFile)).value;
+  const unwrapped=command.command==='remove'?{prepared:saved,compatibility:null}:await unwrapCompatibility(saved,compatibility);
+  const prepared=unwrapped.prepared;
+  const workspaceResult=await apply({command:command.command,wrapper:command.workspace,prepared,
     approval:{decision:'approve',preparedDigest:prepared.digest}},registry,
     {report:async event=>stderr(JSON.stringify(event)+'\n')});
+  let result=await finishCompatibility(workspaceResult,unwrapped.compatibility,compatibility);
+  // Historical switch continuations do not carry a desired-provider envelope.
+  // Inspect the activated installation, but never infer approval for a global write.
+  if(command.command==='continue'&&!unwrapped.compatibility&&compatibility&&result.status==='ready'&&result.lockRelease==='released'){
+    const checked=await doctorCompatibility(await inspectInstallation(command.workspace),compatibility);
+    if(checked.compatibility)result={...result,compatibility:checked.compatibility,...checked.status==='needs-compatibility'?{workspaceStatus:'ready',status:'needs-compatibility'}:{}};
+  }
   await stdout(JSON.stringify(result)+'\n');
   return (result.status==='ready' || (['remove','continue'].includes(command.command) && result.status==='not-installed')) && result.lockRelease==='released' && !result.outputError?0:1;
 }
@@ -386,14 +400,15 @@ async function runLogs(command,stdout,stderr) {
   }finally{await lock.release();}
 }
 
-export async function runCli(args,{stdout,stderr,registry=null}) {
+export async function runCli(args,{stdout,stderr,registry=null,compatibility=null}) {
   if(typeof stdout!=='function' || typeof stderr!=='function')fail('cli.transport');
   try {
     const command=parseCommand(args);
     if(command.command==='help') {await stdout(help+'\n');return 0;}
+    if(command.command==='compat')return await runCompat(command,compatibility,stdout);
     if(command.command==='launch')return await runLaunch(command,stdout,stderr);
     if(command.command==='rebind')return await runRebind(command,stdout);
-    if(command.command==='reset')return await runReset(command,registry,stdout,stderr);
+    if(command.command==='reset')return await runReset(command,registry,stdout,stderr,compatibility);
     if(command.command==='migration')return await runMigrationCommand(command,stdout,stderr);
     if(command.command==='logs')return await runLogs(command,stdout,stderr);
     if(command.command==='policy')return await runPolicy(command,stdout);
@@ -402,9 +417,9 @@ export async function runCli(args,{stdout,stderr,registry=null}) {
       ['abandon','continue-abandon'].includes(command.action)?runRepositoryAbandon:
       command.action==='recover-locks'?runRepositoryLockRecovery:
       ['recover-bootstrap','continue-bootstrap','retire-bootstrap'].includes(command.action)?runBootstrapContinuation:runRepositoryRecovery)(command,stdout);
-    if(['setup','update','repair','remove','switch','continue'].includes(command.command))return await runLifecycle(command,registry,stdout,stderr);
+    if(['setup','update','repair','remove','switch','continue'].includes(command.command))return await runLifecycle(command,registry,stdout,stderr,compatibility);
     const options=command.recoveryPath===undefined?{}:{recoveryPath:command.recoveryPath};
-    const result=await inspectInstallation(command.workspace,options);
+    const result=await doctorCompatibility(await inspectInstallation(command.workspace,options),compatibility);
     await stdout(JSON.stringify(result)+'\n');
     return result.ready?0:1;
   } catch(error) {

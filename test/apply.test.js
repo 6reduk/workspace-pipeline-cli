@@ -42,6 +42,7 @@ import {scanCombinedRetention} from '../src/operations/retention-combined-scan.j
 import {applyRetention} from '../src/operations/retention-apply.js';
 import {previewRetentionPolicy,applyRetentionPolicy,readRetentionPolicy} from '../src/operations/retention-policy.js';
 import {runCli} from '../src/commands/dispatch.js';
+import {createClaudeCompatibility} from '../src/compat/claude.js';
 import {readTOMLField,reconcileTOMLFields} from '../src/operations/toml-fields.js';
 import {sharedAdapter} from '../src/providers/shared.js';
 
@@ -126,12 +127,16 @@ test('S8 TOML takeover backup restores original value and preserves foreign data
   assert.deepEqual(JSON.parse(JSON.stringify(readTOMLField(bytes,pointer).value)),original);
 });
 
-for(const mode of ['setup','remove','switch','switch-before','switch-between','switch-completed','switch-repeat'])test('CLI continuation exact pending operation '+mode,async()=>{
-  const f=await approvedFixture({sharedPlan:c=>[{path:'AGENTS.md',owner:'shared',kind:'file',bytes:Buffer.from(c.pipeline.id)}]});
+for(const mode of ['setup','remove','switch','switch-before','switch-between','switch-completed','switch-repeat','switch-compat'])test('CLI continuation exact pending operation '+mode,async()=>{
+  const compat=mode==='switch-compat';
+  const f=await approvedFixture({...compat?{providers:['claude']}:{},sharedPlan:c=>[{path:'AGENTS.md',owner:'shared',kind:'file',bytes:Buffer.from(c.pipeline.id)}]});
+  const profile=path.join(f.root,'grok-profile'),original=Buffer.from('# personal\n[compat.claude]\nskills=false\n');
+  let compatibility=null;
+  if(compat){await mkdir(profile);await writeFile(path.join(profile,'config.toml'),original);compatibility=createClaudeCompatibility({home:f.root,env:{GROK_HOME:profile,PATH:''}});}
   let oldPath;
   if(mode!=='setup')await applyLifecycle({command:'setup',wrapper:f.a,prepared:f.prepared,approval:f.approval},f.registry);
   if(mode.startsWith('switch')) {
-    const incoming=await approvedFixture({pipelineId:'replacement'}),manifest=JSON.parse(await readFile(incoming.manifestPath,'utf8'));
+    const incoming=await approvedFixture({pipelineId:'replacement',...compat?{providers:['claude']}:{}}),manifest=JSON.parse(await readFile(incoming.manifestPath,'utf8'));
     manifest.pipeline.path=path.relative(f.a,path.resolve(incoming.a,manifest.pipeline.path)).split(path.sep).join('/');
     const manifestPath=path.join(f.a,'incoming.json');await writeFile(manifestPath,JSON.stringify(manifest));
     const prepared=await prepareSwitch({wrapper:f.a,manifestPath,tempRoot:f.root},f.registry),approval={decision:'approve',preparedDigest:prepared.digest};
@@ -166,7 +171,7 @@ for(const mode of ['setup','remove','switch','switch-before','switch-between','s
     oldPath??=await recoveryFile(f.a);
   }
   const before=await workspaceHashes(f.a),other=await workspaceHashes(f.b),oldBytes=await readFile(path.join(f.a,oldPath));
-  const invoke=async(args,stderr=()=>{})=>{let out='';const code=await runCli(args,{registry:f.registry,stdout:s=>{out+=s;},stderr});return {code,out};};
+  const invoke=async(args,stderr=()=>{})=>{let out='';const code=await runCli(args,{registry:f.registry,compatibility,stdout:s=>{out+=s;},stderr});return {code,out};};
   const preview=await invoke(['continue','--workspace',f.a,'--recovery',oldPath]);assert.equal(preview.code,0,preview.out);
   assert.deepEqual(await workspaceHashes(f.a),before);
   const prepared=JSON.parse(preview.out),filename=path.join(f.root,'continue.json');await writeFile(filename,preview.out);
@@ -180,8 +185,8 @@ for(const mode of ['setup','remove','switch','switch-before','switch-between','s
   await writeFile(filename,JSON.stringify({...prepared,digest:'wrong'}));assert.equal((await invoke(args)).code,1);
   assert.deepEqual(await workspaceHashes(f.a),before);
   await writeFile(filename,preview.out);const events=[];
-  const applied=await invoke(args,s=>events.push(JSON.parse(s)));assert.equal(applied.code,0,applied.out);
-  const result=JSON.parse(applied.out);assert.equal(result.status,mode==='remove'?'not-installed':'ready');
+  const applied=await invoke(args,s=>events.push(JSON.parse(s)));assert.equal(applied.code,compat?1:0,applied.out);
+  const result=JSON.parse(applied.out);assert.equal(result.status,compat?'needs-compatibility':mode==='remove'?'not-installed':'ready');
   assert.equal(result.lockRelease,'released');assert.ok(result.journal.path);assert.ok(result.recovery.path);
   assert.ok(events.some(e=>e.kind==='journal-location'));assert.notEqual(result.recovery.path,path.join(f.a,oldPath));
   assert.deepEqual(await readFile(path.join(f.a,oldPath)),oldBytes);assert.deepEqual(await workspaceHashes(f.b),other);
@@ -189,6 +194,19 @@ for(const mode of ['setup','remove','switch','switch-before','switch-between','s
   const after=await workspaceHashes(f.a);
   for(const [name,hash] of Object.entries(before))if(!['AGENTS.md','.pipeline/state.json'].includes(name))assert.equal(after[name],hash,name);
   assert.equal((await invoke(args)).code,1);assert.deepEqual(await workspaceHashes(f.a),after);
+  if(compat){
+    assert.equal(result.workspaceStatus,'ready');
+    assert.equal(result.compatibility.status,'needs-apply');
+    assert.deepEqual(await readFile(path.join(profile,'config.toml')),original);
+    assert.deepEqual(await readdir(profile),['config.toml']);
+    const repair=await invoke(['repair','--workspace',f.a]);assert.equal(repair.code,0,repair.out);
+    assert.equal(JSON.parse(repair.out).kind,'prepared-with-claude-compatibility');
+    await writeFile(filename,repair.out);
+    const repaired=await invoke(['repair','--workspace',f.a,'--apply','--preview',filename]);assert.equal(repaired.code,0,repaired.out);
+    assert.equal(JSON.parse(repaired.out).compatibility.status,'configured');
+    assert.equal((await invoke(['doctor','--workspace',f.a])).code,0);
+    assert.deepEqual(await readFile(path.join(f.a,oldPath)),oldBytes);
+  }
 });
 
 for(const interrupted of [false,true])test('CLI switch two phases interrupted='+interrupted,async()=>{

@@ -11,6 +11,11 @@ export function formatResult(value) {
     if (value.pipeline) lines.push(`Pipeline: ${safe(value.pipeline.id)} @ ${safe(value.pipeline.version)}`,
       `Providers: ${value.pipeline.providers.map(safe).join(', ')}`);
     for (const key of ['configuration', 'transactionEvidence']) if (value[key] !== undefined) lines.push(`${key}: ${safe(value[key])}`);
+    if(value.compatibility)lines.push(`Grok / Claude compatibility: ${safe(value.compatibility.status)}`,
+      ...(value.compatibility.path?[`User config: ${safe(value.compatibility.path)}`]:[]),
+      ...(value.compatibility.blockers??[]).map(b=>`  - ${safe(b)}`),
+      `Native compatibility inspection: ${safe(value.compatibility.native?.status??'not-run')}.`,
+      'Native discovery is not model/agent/MCP execution certification.');
     lines.push('', `Diagnostics: ${value.diagnostics.length}`);
     for (const item of value.diagnostics) lines.push(`  - ${safe(item.code)}${item.subject ? ': ' + safe(item.subject) : ''}${item.pointer ? ' ' + safe(item.pointer) : ''}`);
     lines.push('', 'Runtime / model-visible skills / MCP: not verified by doctor.',

@@ -80,7 +80,10 @@ restoration; empty reset must be explicitly selected.
 If stdout fails after a successful apply, exit 2 does not undo that apply.
 Operation events and `doctor` distinguish actual configuration state from output
 delivery. Errors expose stable codes, not raw exception messages or argv secrets.
-No force unlock, rollback, retry or global configuration mutation is performed.
+The workspace transaction does not force unlock, rollback or mutate global config.
+For Claude-only delivery, the public CLI binds a separate, explicit
+[user-wide Grok prerequisite](claude-grok.md) to preview/apply. Workspace success
+followed by prerequisite failure is reported as `needs-compatibility`.
 
 ## Offline repair and removal
 
@@ -163,4 +166,7 @@ boundary, `uncertain: null` means no ambiguous write: only unrecorded operations
 and phase checks remain. Completed outcomes are not replayed. After both recorded
 phase checks, an empty remainder permits separately checked activation, not an
 inferred phase success. Failed/corrupt journals and changed targets fail closed.
-No source download, global setting change, force unlock or retention cleanup occurs.
+No source download, force unlock or retention cleanup occurs. A Claude-only
+continuation with an explicit compatibility envelope can apply its separately
+approved global prerequisite. Historical switch continuations only inspect it
+after activation; missing compatibility requires a fresh repair preview/apply.

@@ -111,8 +111,9 @@ This is installation metadata, not a pipeline/document version requirement.
   locks, renews approvals or silently selects an updated pipeline version.
 - A missing state is `not-installed` only when metadata is absent; residual
   metadata with no valid state remains incomplete, not a clean installation.
-- Provider-specific discovery/global compatibility checks are later adapter work;
-  synthetic provider-double readiness is not live-provider certification.
+- The public CLI additionally checks the [Claude-only Grok prerequisite](claude-grok.md),
+  including native compatibility inventory when an executable is available.
+  Synthetic provider-double readiness is not live-provider certification.
 
 ### Repository completion is not lock recovery
 

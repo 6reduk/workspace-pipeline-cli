@@ -1,5 +1,9 @@
 # Scoped Grok launch (S11 development)
 
+For new Claude-only delivery, use **plain `grok`**, not this legacy launcher.
+See [Claude/Grok shared delivery](claude-grok.md). The launcher below is retained
+only for old native-Grok installations and deliberately sets imports false.
+
 ## Configuration limitation (checked 2026-09-23)
 
 The desired UX is ordinary `grok` with workspace-local compatibility settings,
@@ -7,8 +11,8 @@ not a mandatory launcher. This is currently blocked by the harness: installed
 Grok 1.0.40 and the upstream configuration reference list only `mcp_servers`,
 `plugins`, `permission`, and `mcp.max_output_bytes` as project config inputs.
 `compat.claude` is not among them. Writing five false values locally must not be
-represented as working import suppression. The CLI does not change user-wide
-compat settings as a substitute. The legacy launch route below remains an
+represented as working import suppression. This legacy native-Grok route does
+not enable the new user-wide Claude compatibility prerequisite. It remains an
 explicit workaround, not the approved long-term configuration model.
 
 Source: [Grok configuration reference](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/26-config-reference.md),
