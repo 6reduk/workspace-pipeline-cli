@@ -31,6 +31,7 @@ import {parseCompat,runCompat} from './compat.js';
 
 export const help=`Workspace Pipeline CLI — development preview
 Usage: workspace-pipeline doctor --workspace <absolute-directory> [--recovery <relative-record>] [--json]
+       workspace-pipeline update --workspace <absolute-directory> [--yes | --preview] [--json]
        workspace-pipeline compat claude [recover-lock] [--apply --preview <absolute-json-file>] [--json]
        workspace-pipeline launch grok --workspace <absolute-directory> --executable <absolute-native-executable> [--inspect] [--execute]
        workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --choices <absolute-json-file> [--manifest <absolute-file>] [--network]

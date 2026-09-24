@@ -33,6 +33,16 @@ test('json writer preserves exact bytes; human output passes help through',async
   const bytes='{"payload":"original"}\n';await outputWriter(write,true)(bytes);
   await outputWriter(write,false)('Usage: help\n');assert.deepEqual(output,[bytes,'Usage: help\n']);
 });
+
+test('human output escapes all bidi controls but JSON preserves original data',async()=>{
+  const chars='\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069';
+  const raw=JSON.stringify({path:'file'+chars+'name'})+'\n';
+  const lines=[];await outputWriter(x=>lines.push(x),true)(raw);assert.equal(lines[0],raw);
+  for(const value of [{path:chars},{ready:false,status:chars,workspace:chars,diagnostics:[{code:chars,subject:chars}]}]){
+    const text=formatResult(value);
+    for(const c of chars){assert.ok(!text.includes(c));assert.ok(text.includes('\\u'+c.charCodeAt(0).toString(16).padStart(4,'0')));}
+  }
+});
 test('executable uses readable errors by default and machine errors with --json',()=>{
   const cli=fileURLToPath(new URL('../src/cli.js',import.meta.url));
   for(const json of [false,true]){

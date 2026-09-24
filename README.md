@@ -1,5 +1,10 @@
 # Workspace Pipeline CLI
 
+Everyday update: `workspace-pipeline update --workspace <directory>` shows the
+changes and asks for confirmation. Use `--yes` for unattended application or
+`--preview --json` to retain the advanced saved-plan workflow. See
+[update modes](docs/lifecycle-cli.md#everyday-update-executable).
+
 Claude/Grok shared delivery: [one Claude configuration, plain Grok launch,
 global compatibility preview and recovery](docs/claude-grok.md).
 

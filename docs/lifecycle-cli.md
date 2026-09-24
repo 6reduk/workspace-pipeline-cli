@@ -14,6 +14,52 @@ CLI assembly supplies built-in adapters, never package code.
 
 ## Preview and apply contract
 
+### Everyday update (executable)
+
+`workspace-pipeline update --workspace <absolute-wrapper>` prepares a plan,
+shows every affected path and any user-wide Grok compatibility changes, and
+asks `Apply these changes? [y/N]`. Accepted confirmations are `y`, `yes`, `д`,
+or `да` (case-insensitive, surrounding whitespace ignored). Enter or any other
+answer cancels. Cancellation exits 0 with `status: cancelled, applied: false`;
+exit 0 alone does not mean an update was applied. The CLI
+manages a private temporary preview internally and uses the same approval and
+drift checks as saved-plan apply. No automatic reset or conflict bypass occurs.
+
+`--yes` authorizes this update without a prompt (including displayed global
+changes). Non-interactive input without `--yes` refuses before preparation.
+`--preview` explicitly requests preparation only. `--preview --json` saves a
+machine plan; for compatibility, `update --json` alone also remains preview-only.
+`--yes --json` emits the final machine result on stdout and the change summary
+on stderr; `--json` by itself never authorizes writes. The deterministic embedded
+`runCli` API keeps its prior preview/apply behavior; this convenience is in the
+executable entry layer. Other commands keep their existing explicit flow.
+
+```
+workspace-pipeline update --workspace C:\Work\Game
+workspace-pipeline update --workspace C:\Work\Game --yes
+workspace-pipeline update --workspace C:\Work\Game --preview --json > preview.json
+workspace-pipeline update --workspace C:\Work\Game --apply --preview C:\Private\preview.json
+```
+
+Saved plans remain useful for LLM work, migrations and separate approval. Do not
+share them publicly: configuration payloads can contain private values. A failed
+apply can have partial effects: inspect doctor/recovery, do not blindly retry.
+
+The internal preview is in the current user's OS temporary directory, inside a
+unique `wpc-approved-update-*` directory. It may contain private configuration.
+On POSIX the preview is created with mode `0600`; Windows/NTFS does not enforce
+that POSIX mode, so confidentiality depends on the inherited Windows ACLs of
+your temporary directory. The CLI does not change those ACLs. Use a private
+user temp directory, not a shared writable temp location.
+
+Normal completion (including handled apply failure) attempts to remove only
+that preview and its empty directory. A killed process or failed cleanup can
+leave the directory behind; there is no automatic janitor. After stopping the
+owning update process and inspecting doctor/recovery, you may manually remove
+its obsolete `wpc-approved-update-*` directory. Do not delete another active
+run's directory or `.pipeline/transactions`/backups as part of this cleanup.
+The temporary preview is not a replacement for durable recovery evidence.
+
 Once a trusted registry is provided by the CLI assembly:
 
 ```text

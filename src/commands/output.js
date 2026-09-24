@@ -1,6 +1,7 @@
 // Presentation boundary only: internal command results and saved JSON contracts
 // remain unchanged. Never infer success from the shape of a rendered result.
-const safe = value => String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+export const safeTerminalText = value => String(value).replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+const safe = safeTerminalText;
 const privateKey = /bytes|base64|content|secret|token|password/i;
 
 export function formatResult(value) {

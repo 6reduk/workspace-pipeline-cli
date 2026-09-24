@@ -59,6 +59,11 @@ try{
   await put(home,'.grok/config.toml',config);
   assert.equal(cliRun(['doctor','--workspace',workspace],1).status,'needs-compatibility');
   assert.equal((await apply('repair')).result.compatibility.status,'configured');
+  // Human convenience path uses the same installed executable without a supplied preview.
+  await put(home,'.grok/config.toml',config);
+  const automatic=cliRun(['update','--workspace',workspace,'--yes']);
+  assert.equal(automatic.status,'ready');assert.equal(automatic.compatibility.status,'configured');
+  report.checks.push('published-shape executable update --yes --json applies without a user preview file');
   assert.equal((await apply('reset',['--bundles','pair'])).result.compatibility.status,'configured');
   const retained=await readFile(path.join(home,'.grok/config.toml'));
   await apply('remove',['--bundles','pair']);assert.deepEqual(await readFile(path.join(home,'.grok/config.toml')),retained);
