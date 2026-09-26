@@ -12,6 +12,16 @@ export function formatResult(value) {
     if (value.pipeline) lines.push(`Pipeline: ${safe(value.pipeline.id)} @ ${safe(value.pipeline.version)}`,
       `Providers: ${value.pipeline.providers.map(safe).join(', ')}`);
     for (const key of ['configuration', 'transactionEvidence']) if (value[key] !== undefined) lines.push(`${key}: ${safe(value[key])}`);
+    if(value.binding) lines.push(`Git source: ${safe(value.binding.source.url??value.binding.source.path)}`,
+      `Git revision: ${safe(value.binding.commit)}`, `Source digest: ${safe(value.binding.digest)}`);
+    if(value.files) {
+      lines.push('', 'Adapter files (changes that setup/update may replace):');
+      for(const [key,label] of [['extra','Extra — removed'],['modified','Modified — overwritten'],['missing','Missing — installed'],['blocked','Unsafe — requires attention']]) {
+        const items=value.files[key]??[];lines.push(`  ${label}: ${items.length}`);
+        for(const item of items)lines.push(`    ${safe(item.path)}${item.reason?' ('+safe(item.reason)+')':''}`);
+      }
+      lines.push('Backups are off by default; use --backup when applying.');
+    }
     if(value.compatibility)lines.push(`Grok / Claude compatibility: ${safe(value.compatibility.status)}`,
       ...(value.compatibility.path?[`User config: ${safe(value.compatibility.path)}`]:[]),
       ...(value.compatibility.blockers??[]).map(b=>`  - ${safe(b)}`),

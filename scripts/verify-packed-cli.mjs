@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {verifyPackedRepositories} from './verify-packed-repositories.mjs';
+import {verifyPackedDesired} from './verify-packed-desired.mjs';
 
 // Explicit opt-in via npm run test:packed. Offline install into a unique temp
 // prefix; scripts/audit/funding disabled, no harness, global install or cleanup.
@@ -13,6 +14,8 @@ const repo=fileURLToPath(new URL('../',import.meta.url)),npm=process.env.npm_exe
 assert.ok(npm&&path.isAbsolute(npm),'Run through npm run test:packed');
 const root=await mkdtemp(path.join(tmpdir(),'wpc-packed-'));
 const report={root,status:'running',checks:[],network:'offline',publication:false};
+const desiredOnly=process.argv.includes('--desired-only');
+report.scope=desiredOnly?'desired-state-only':'full-packed';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const runNpm=args=>execFileSync(process.execPath,[npm,...args],{
   cwd:repo,encoding:'utf8',windowsHide:true,timeout:120000,maxBuffer:4*1024*1024,
@@ -41,6 +44,7 @@ try {
   };
   assert.match(run(['--help']),/Workspace Pipeline CLI/);
   report.checks.push({name:'installed-bin-metadata-and-node-entrypoint'});
+  if(!desiredOnly) {
   const a=path.join(root,'a'),b=path.join(root,'b');await mkdir(a);await mkdir(b);
   assert.equal(JSON.parse(run(['doctor','--workspace',a],1)).status,'not-installed');
     for(const verb of ['setup','update','repair','remove'])run([verb,'--workspace',a],2);
@@ -70,6 +74,8 @@ try {
   assert.deepEqual(await readdir(path.join(a,'.pipeline')),['retention.json']);
   report.checks.push({name:'isolated-doctor-policy-v2-preview-apply-disable-and-no-work-cleanup',workspaceBUnchanged:true});
   await verifyPackedRepositories({root,installed,cli,report});
+  }
+  await verifyPackedDesired({root,installed,cli,report});
   report.status='passed';
 }catch(e){report.status='failed';report.error={name:e.name,code:e.code??null,message:String(e.message).slice(0,500)};process.exitCode=1;}
 await writeFile(path.join(root,'report.json'),JSON.stringify(report,null,2)+'\n');

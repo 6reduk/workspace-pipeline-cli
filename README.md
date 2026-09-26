@@ -1,5 +1,18 @@
 # Workspace Pipeline CLI
 
+## Desired-state installation (0.7.0 release candidate)
+
+The working tree adds manifest schema 2: ordinary `setup --source ... --adapters ...`
+creates `workspace.json` after confirmation; `update` uses it without a separate
+preview file. Whole-owned adapter contents are replaced, including custom files;
+backups are opt-in with `--backup`. Shared configurations change only declared fields.
+See [setup, update, doctor and source authoring](docs/desired-state.md).
+This is not in the published 0.6.0 package. The sections below describe the legacy
+release and explicit recovery routes; do not mix their backup/preview contracts
+with schema 2.
+
+## Published legacy lifecycle
+
 Everyday update: `workspace-pipeline update --workspace <directory>` shows the
 changes and asks for confirmation. Use `--yes` for unattended application or
 `--preview --json` to retain the advanced saved-plan workflow. See
@@ -77,7 +90,7 @@ Startup cleanup is disabled unless the user enables a local policy via
 that policy; public setup/update uses the same coordinator. Policy commands only
 write `.pipeline/retention.json`, never harness settings or project documents.
 Repository init/adopt previews acquire the explicitly selected Git pipeline source;
-remote access additionally requires `--network`. No command launches MCP or changes
+remote acquisition follows the selected source without an extra flag. No command launches MCP or changes
 credentials. Repository setup and provider activation are separate steps.
 See [repository commands](docs/repositories.md), [recovery](docs/repository-recovery.md)
 and [manual recovery boundaries](docs/repository-manual-recovery.md).

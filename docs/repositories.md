@@ -29,8 +29,8 @@ workspace-pipeline wrap --workspace "C:\Work\GameWorkspace" --manifest "C:\Work\
 
 Use `--json` and save the exact JSON stdout as UTF-8 `preview.json` outside the affected repository
 and wrapper. Read its operations and blockers. Preview may acquire a temporary
-Git snapshot, but does not perform repository effects. Remote access is explicit
-with `--network`; local Git does not need that flag. Do not put credentials into
+Git snapshot, but does not perform repository effects. A selected remote source
+is fetched during preparation; local Git is read from disk. Do not put credentials into
 source URLs or retained preview files.
 
 ```powershell

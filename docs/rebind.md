@@ -27,7 +27,7 @@ and `proposed.manifest`. The first command only reads local state/history and th
 new manifest. It does not fetch Git, move files, or activate the new origin.
 
 `--accept-rebind` explicitly approves the saved proposal for source acquisition.
-For a remote source, add `--network` to this second command. Inspect the resulting
+A remote source is fetched during this second command. Inspect the resulting
 update operations before the third command, which separately approves file writes.
 The new origin becomes active as part of that normal, locked update, not as a
 standalone write to `.pipeline/state.json`.

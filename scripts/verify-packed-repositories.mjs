@@ -8,17 +8,19 @@ import {createHash} from 'node:crypto';
 // Invoked by test:packed after an offline tarball installation. Public commands
 // use only the installed package entrypoint. Fault injection also imports that
 // installed package (not working-tree code), explicitly recorded below.
-export async function verifyPackedRepositories({root,installed,cli,report}) {
+export async function verifyPackedRepositories({root,installed,cli,report,stopAfterWrap=false}) {
   const base=path.join(root,'repositories');await mkdir(base);
   const sha=b=>'sha256:'+createHash('sha256').update(b).digest('hex');
   const git=(cwd,args)=>execFileSync('git',['-c','core.hooksPath=',...args],{
     cwd,encoding:'utf8',windowsHide:true,timeout:30000,stdio:['ignore','pipe','pipe'],
     env:{...process.env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:process.platform==='win32'?'NUL':'/dev/null',GIT_TERMINAL_PROMPT:'0'}}).trim();
   const invoke=(args,expected=0)=>{
-    let out,err='',code=0;
+    let out,err='',code=0,processError=null;const started=performance.now();
     try{out=execFileSync(process.execPath,[cli,...args,...(args.includes('--json')?[]:['--json'])],{cwd:base,encoding:'utf8',windowsHide:true,
       timeout:120000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']});}
-    catch(e){code=e.status;out=e.stdout;err=e.stderr;}
+    catch(e){code=e.status;out=e.stdout;err=e.stderr;
+      processError={code:e.code??null,signal:e.signal??null,status:e.status??null,elapsedMs:Math.round(performance.now()-started)};}
+    if(code!==expected)report.processFailure={command:args[0],processError,stderr:String(err)};
     assert.equal(code,expected,JSON.stringify({args,code,stderr:String(err)}));
     return {text:out,value:out?JSON.parse(out):null,err};
   };
@@ -66,6 +68,7 @@ export async function verifyPackedRepositories({root,installed,cli,report}) {
   assert.equal(await readFile(path.join(target,'untracked.txt'),'utf8'),'untracked');
   assert.deepEqual({head:git(target,['rev-parse','HEAD']),status:git(target,['status','--porcelain=v1']),origin:git(target,['remote','get-url','origin'])},before);
   await absent(original);report.checks.push({name:'packed-wrap-dirty-untracked-head-origin-preserved'});
+  if(stopAfterWrap){report.scope='focused-init-and-wrap-only';return;}
   const collision=await fixture('directory',true);await preview(collision,'adopt');
   await mkdir(path.join(collision.wrapper,'project'));await writeFile(path.join(collision.wrapper,'project/foreign.txt'),'foreign');
   invoke(['adopt','--workspace',collision.wrapper,'--apply','--preview',collision.preview],2);

@@ -71,7 +71,7 @@ test('CLI output transport failure is a safe nonzero result',async()=>{
 test('CLI lifecycle parsing separates acquisition and exact apply without code-loading flags',()=>{
   const root=path.resolve('workspace'),file=path.resolve('private-preview.json');
   for(const verb of ['setup','update']) {
-    assert.deepEqual(parseCommand([verb,'--workspace',root,'--network']),{command:verb,workspace:root,network:true});
+    assert.throws(()=>parseCommand([verb,'--workspace',root,'--network']),e=>e.code==='cli.arguments');
     assert.deepEqual(parseCommand([verb,'--workspace',root,'--apply','--preview',file]),
       {command:verb,workspace:root,apply:true,previewFile:file});
     for(const extra of [['--apply'],['--preview',file],['--apply','--preview',file,'--network'],

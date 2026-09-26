@@ -8,6 +8,7 @@ import { validateStructure } from '../contracts/validate.js';
 import { portablePath } from '../contracts/semantic.js';
 import { LIMITS, cap, utf8, verifyPackage } from './inventory.js';
 import { materialize } from './snapshot.js';
+import {verifyDesiredPackage} from './desired-package.js';
 import { repositoryBudget } from './repository-budget.js';
 
 const oid = value => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
@@ -259,7 +260,8 @@ export async function acquireRemoteRepository(source, { tempRoot, network = fals
   }
 }
 
-export async function acquire(source, { manifestBase, tempRoot = tmpdir(), network = false, packLimit = LIMITS.pack } = {}) {
+export async function acquire(source, { manifestBase, tempRoot = tmpdir(), network = false, packLimit = LIMITS.pack, packageFormat='legacy' } = {}) {
+  if(!['legacy','desired'].includes(packageFormat))fail('source.package-format');
   validateSource(source);
   cap(packLimit, LIMITS.pack, 'source.pack-limit');
   if (!path.isAbsolute(manifestBase ?? '')) fail('source.manifest-base');
@@ -284,7 +286,8 @@ export async function acquire(source, { manifestBase, tempRoot = tmpdir(), netwo
   const rootType = await runGit(repo, ['cat-file', '-t', treeish], options);
   if (utf8(rootType.bytes).trim() !== 'tree') fail('source.package-root');
   const listing = await runGit(repo, ['ls-tree', '-r', '-l', '-z', '--full-tree', treeish], options);
-  const verified = await verifyPackage(parseListing(listing.bytes), async entry => {
+  const verify=packageFormat==='desired'?verifyDesiredPackage:verifyPackage;
+  const verified = await verify(parseListing(listing.bytes), async entry => {
     const r = await runGit(repo, ['cat-file', 'blob', entry.oid], { ...options, outputLimit: LIMITS.blob });
     return r.bytes;
   });
@@ -293,7 +296,8 @@ export async function acquire(source, { manifestBase, tempRoot = tmpdir(), netwo
   if (performance.now() > deadline) fail('source.timeout');
   return { source: structuredClone(source), resolvedSource, commit, preparation, snapshotPath,
     manifest: verified.manifest, inventoryDigest: verified.inventoryDigest,
-    digest: verified.digest, fileHashes: verified.fileHashes, runtime: 'not-run' };
+    digest: verified.digest, fileHashes: verified.fileHashes, runtime: 'not-run',
+    ...(packageFormat==='desired'?{files:verified.files}: {}) };
   } catch (cause) {
     const error = cause instanceof ContractError ? cause : new ContractError('source.io');
     if (preparation) error.preparation = preparation;

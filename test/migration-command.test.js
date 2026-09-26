@@ -5,7 +5,7 @@ import {parseCommand,runCli} from '../src/commands/dispatch.js';
 const workspace=path.resolve('synthetic-never-created'),manifest=path.resolve('synthetic-manifest.json');
 test('migration parser requires explicit source/phase and rejects write switches',()=>{
  const prefix=['migration','unity','preview','--workspace',workspace,'--manifest',manifest];
- assert.equal(parseCommand(prefix).action,'preview');assert.equal(parseCommand([...prefix,'--network']).network,true);
+ assert.equal(parseCommand(prefix).action,'preview');assert.throws(()=>parseCommand([...prefix,'--network']),e=>e.code==='cli.arguments');
  for(const extra of [['--apply'],['--manifest',manifest],['--phase','closeout'],['--recovery','x']])assert.throws(()=>parseCommand([...prefix,...extra]));
  const recovery='.pipeline/migrations/11111111-1111-1111-1111-111111111111/recovery.json';
  for(const phase of ['deactivation','installation','recovery','closeout','compensation'])

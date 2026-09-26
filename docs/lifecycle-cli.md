@@ -1,5 +1,10 @@
 # Lifecycle CLI routing — development scope
 
+This page describes schema-1 legacy operations and their saved-plan/recovery
+contract. For the new schema-2 desired-state setup/update (no mandatory preview,
+no default backup), see [the desired-state guide](desired-state.md). Do not apply
+the legacy conflict/backup/launcher rules below to the new installer.
+
 The generic dispatcher routes `setup`, `update`, `repair`, `remove`, `switch` and `continue` through
 the native operation APIs and their coordinators. The packaged entrypoint supplies
 compiled Codex, Claude, Kimi and Grok adapters. S11 review and native Kimi/Grok
@@ -63,8 +68,8 @@ The temporary preview is not a replacement for durable recovery evidence.
 Once a trusted registry is provided by the CLI assembly:
 
 ```text
-workspace-pipeline setup --workspace <absolute-wrapper> [--manifest <absolute-file>] [--network]
-workspace-pipeline update --workspace <absolute-wrapper> [--manifest <absolute-file>] [--network]
+workspace-pipeline setup --workspace <absolute-wrapper> [--manifest <absolute-file>]
+workspace-pipeline update --workspace <absolute-wrapper> [--manifest <absolute-file>]
 workspace-pipeline setup --workspace <absolute-wrapper> --apply --preview <absolute-json-file>
 workspace-pipeline update --workspace <absolute-wrapper> --apply --preview <absolute-json-file>
 ```
@@ -72,7 +77,7 @@ workspace-pipeline update --workspace <absolute-wrapper> --apply --preview <abso
 Preview displays a human-readable summary by default. Add `--json` to return
 the complete prepared JSON on stdout for saving and subsequent apply. It may acquire a Git
 source into temporary storage outside the wrapper, but does not write provider
-configuration. Network acquisition requires explicit `--network`. When manifest
+configuration. Remote Git acquisition follows the selected source. When manifest
 is omitted, setup uses the standard workspace manifest; update uses the recorded
 manifest origin. Relocation does not silently rebind it. Use the explicit
 [manifest rebind workflow](rebind.md) to change that origin.
@@ -80,7 +85,7 @@ manifest origin. Relocation does not silently rebind it. Use the explicit
 Save prepared JSON privately, inspect its operations and then explicitly invoke
 `--apply --preview`. It may contain configuration secrets and absolute local
 paths; do not commit it or send it to shared logs. Apply does not accept
-`--manifest` or `--network`, acquire a fresh source, or substitute a new preview.
+`--manifest`, acquire a fresh source, or substitute a new preview.
 Missing/stale staged data is an error, not permission to download replacements.
 
 Apply binds the verb and exact wrapper before lock acquisition, then invokes
@@ -147,7 +152,7 @@ Removal preserves other installed providers and shared files while needed; full
 removal restores taken-over content and removes only owned scope. Missing/corrupt
 snapshots, backups, unresolved history or conflicting user edits fail closed.
 Neither route reads the original manifest or downloads from Git. `--manifest`
-and `--network` are rejected. `--providers` and `--bundles` are remove-preview-only;
+is rejected. `--providers` and `--bundles` are remove-preview-only;
 omitting both previews all installed providers and bundles. Use actual installed
 bundle IDs; selecting a bundle member via `--providers` fails with
 `remove.bundle-required`. The saved subject fixes the actual selection, so apply
@@ -168,7 +173,7 @@ Interrupted-operation continuation has a separate exact approval boundary below.
 With the same trusted built-in registry restriction:
 
 ```text
-workspace-pipeline switch --workspace <absolute-wrapper> --manifest <absolute-incoming-manifest> [--network]
+workspace-pipeline switch --workspace <absolute-wrapper> --manifest <absolute-incoming-manifest>
 workspace-pipeline switch --workspace <absolute-wrapper> --apply --preview <absolute-json-file>
 ```
 

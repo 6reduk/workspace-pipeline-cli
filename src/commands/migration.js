@@ -18,11 +18,10 @@ const inspectors={deactivation:prepareLegacyUnityDeactivationResume,installation
 export function parseMigrationCommand(args){
  if(args[1]!=='unity'||!['preview','inspect','apply'].includes(args[2]))fail('cli.arguments');
  const result={command:'migration',action:args[2]},seen=new Set();
- const allowed=result.action==='apply'?['--workspace','--preview','--json']:result.action==='preview'?['--workspace','--manifest','--network','--json']:['--workspace','--recovery','--phase','--json'];
+ const allowed=result.action==='apply'?['--workspace','--preview','--json']:result.action==='preview'?['--workspace','--manifest','--json']:['--workspace','--recovery','--phase','--json'];
  for(let i=3;i<args.length;i++){
   const flag=args[i];if(!allowed.includes(flag)||seen.has(flag))fail('cli.arguments');seen.add(flag);
   if(flag==='--json')continue;
-  if(flag==='--network'){result.network=true;continue;}
   const value=args[++i];if(value===undefined||value.startsWith('--'))fail('cli.arguments');
   if(flag==='--workspace')result.workspace=absoluteRoot(value);
   if(flag==='--manifest')result.manifestPath=absoluteRoot(value);
@@ -41,7 +40,7 @@ export async function runMigrationCommand(command,stdout,stderr){
  if(command.action==='apply')return runMigrationApply(command,stdout,stderr);
  await stderr('Migration preview may contain private configuration bytes. Save it locally; do not publish it. Inspect before explicit apply.\n');
  const before=await readInstallerIdentity();
- const result=command.action==='preview'?await prepareLegacyUnityPreview({wrapper:command.workspace,manifestPath:command.manifestPath,network:command.network===true,
+ const result=command.action==='preview'?await prepareLegacyUnityPreview({wrapper:command.workspace,manifestPath:command.manifestPath,network:true,
   tempRoot:await mkdtemp(path.join(tmpdir(),'wpc-migration-prepare-'))}):
   await inspectors[command.phase](command.workspace,command.recoveryPath);
  const bound=await bindMigrationInstaller(result);

@@ -28,8 +28,9 @@ export async function assertLockHeld(lock) {
 // Cooperative workspace-local exclusion. Existing/stale locks are never stolen.
 // This does not prevent an editor or hostile process from replacing filesystem
 // entries; S5 apply must independently recheck each subject before every write.
-export async function acquireWorkspaceLock(workspace,{repositoryOperation,migrationOperation}={}) {
+export async function acquireWorkspaceLock(workspace,{repositoryOperation,migrationOperation,purpose}={}) {
   workspace = absoluteRoot(workspace);
+  if(purpose!==undefined && (purpose!=='desired-state'||repositoryOperation!==undefined||migrationOperation!==undefined))fail('lock.purpose');
   if(repositoryOperation!==undefined&&migrationOperation!==undefined)fail('lock.capability-conflict');
   const guard=async()=>{
     if(migrationOperation!==undefined){
@@ -57,7 +58,7 @@ export async function acquireWorkspaceLock(workspace,{repositoryOperation,migrat
     // Failure after mkdir deliberately leaves a non-acquirable lock for review.
     await inspectDirectory(directory);
     const owner = { schemaVersion: 1, workspace, token: randomUUID(), pid: process.pid,
-      host: hostname(), createdAt: new Date().toISOString() };
+      host: hostname(), createdAt: new Date().toISOString(),...(purpose?{purpose}:{}) };
     const bytes = Buffer.from(JSON.stringify(owner) + '\n');
     const handle = await open(ownerFile, 'wx', 0o600);
     try { await handle.writeFile(bytes); await handle.sync(); }

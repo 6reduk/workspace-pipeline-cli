@@ -74,7 +74,7 @@ export async function runRepositoryCommand(command,stdout,stderr) {
   if(!command.apply) {
     const choices=(await readRecord(command.choicesFile)).value;
     const prepared=await prepareRepositoryCommand({command:command.command,wrapper:command.workspace,
-      manifestPath:command.manifestPath,choices,network:command.network??false});
+      manifestPath:command.manifestPath,choices,network:true});
     await stdout(JSON.stringify(prepared)+'\n');return prepared.preview.status==='blocked'?1:0;
   }
   const prepared=(await readRecord(command.previewFile)).value;

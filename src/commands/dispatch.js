@@ -1,4 +1,5 @@
 import {inspectInstallation} from '../operations/doctor.js';
+import {inspectDesiredInstallation} from '../desired-state/doctor.js';
 import {absoluteRoot} from '../workspace/paths.js';
 import {ContractError,fail} from '../contracts/parse.js';
 import {runRepositoryRecovery} from './repositories.js';
@@ -30,22 +31,32 @@ import {bindCompatibility,unwrapCompatibility,finishCompatibility,doctorCompatib
 import {parseCompat,runCompat} from './compat.js';
 
 export const help=`Workspace Pipeline CLI — development preview
+Desired-state (schema 2, executable):
+       workspace-pipeline recover-lock --workspace <absolute-directory> [--global] [--yes | --preview] [--json]
+       workspace-pipeline reset --workspace <absolute-directory> [--backup] [--yes | --preview] [--json]
+       workspace-pipeline remove --workspace <absolute-directory> [--backup] [--yes | --preview] [--json]
+       workspace-pipeline setup --workspace <existing-absolute-directory> --source <local-Git-path|https-or-ssh-URL> --adapters <comma-separated-ids> [--ref <Git-ref>] [--subdirectory <source-package-path>]
+         [--repository <id=relative-path> ...] [--documentation <id=relative-path>] [--yes | --preview] [--backup] [--json]
+       workspace-pipeline update --workspace <absolute-directory> [--yes | --preview] [--backup] [--json]
+setup defaults to game=project, documentation game=docs; multi-repo requires explicit documentation.
+No backup by default. Whole-owned adapter customizations are replaced. No project move/clone.
+Existing schema-1 and advanced lifecycle commands:
 Usage: workspace-pipeline doctor --workspace <absolute-directory> [--recovery <relative-record>] [--json]
        workspace-pipeline update --workspace <absolute-directory> [--yes | --preview] [--json]
        workspace-pipeline compat claude [recover-lock] [--apply --preview <absolute-json-file>] [--json]
        workspace-pipeline launch grok --workspace <absolute-directory> --executable <absolute-native-executable> [--inspect] [--execute]
-       workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --choices <absolute-json-file> [--manifest <absolute-file>] [--network]
+       workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --choices <absolute-json-file> [--manifest <absolute-file>]
        workspace-pipeline <init|adopt|wrap> --workspace <absolute-directory> --apply --preview <absolute-json-file>
-       workspace-pipeline <setup|update> --workspace <absolute-directory> [--manifest <absolute-file>] [--network]
+       workspace-pipeline <setup|update> --workspace <absolute-directory> [--manifest <absolute-file>]
        workspace-pipeline <setup|update> --workspace <absolute-directory> --apply --preview <absolute-json-file>
        workspace-pipeline rebind --workspace <absolute-directory> --manifest <absolute-file>
-       workspace-pipeline update --workspace <absolute-directory> --accept-rebind <absolute-json-file> [--network]
+       workspace-pipeline update --workspace <absolute-directory> --accept-rebind <absolute-json-file>
        workspace-pipeline reset --workspace <absolute-directory> --all [--to installed|empty]
        workspace-pipeline reset --workspace <absolute-directory> [--providers <ids>] [--bundles <ids>] [--to installed|empty]
        workspace-pipeline reset --workspace <absolute-directory> --apply --preview <absolute-json-file>
        workspace-pipeline <repair|remove> --workspace <absolute-directory> [--providers <comma-separated-ids>] [--bundles <comma-separated-ids>]
        workspace-pipeline <repair|remove> --workspace <absolute-directory> --apply --preview <absolute-json-file>
-       workspace-pipeline switch --workspace <absolute-directory> --manifest <absolute-file> [--network]
+       workspace-pipeline switch --workspace <absolute-directory> --manifest <absolute-file>
        workspace-pipeline switch --workspace <absolute-directory> --apply --preview <absolute-json-file>
        workspace-pipeline continue --workspace <absolute-directory> --recovery <relative-record>
        workspace-pipeline continue --workspace <absolute-directory> --apply --preview <absolute-json-file>
@@ -59,7 +70,7 @@ Usage: workspace-pipeline doctor --workspace <absolute-directory> [--recovery <r
        workspace-pipeline --help
 
 Migration commands (development preview):
-       workspace-pipeline migration unity preview --workspace <absolute-directory> --manifest <absolute-file> [--network]
+       workspace-pipeline migration unity preview --workspace <absolute-directory> --manifest <absolute-file>
        workspace-pipeline migration unity inspect --workspace <absolute-directory> --recovery <relative-record> --phase <deactivation|installation|recovery|closeout|compensation>
        workspace-pipeline migration unity apply --workspace <absolute-directory> --preview <absolute-file>
 Preview stages Git externally; inspect is read-only/offline. JSON can contain
@@ -85,8 +96,8 @@ Built-in workspace adapters: Codex, Claude, Kimi and Grok (configuration deliver
 Grok Claude-import suppression requires the scoped launch command, not direct grok.
 Kimi/Grok native session discovery remains separately verified; setup is not runtime certification.
 No native plugin installation, global activation, trust grant or MCP invocation.
-Preview may stage Git source outside the workspace; --network explicitly permits
-remote acquisition. Save the complete prepared JSON privately and inspect it
+Preview may stage Git source outside the workspace; selecting a remote source
+permits acquisition during preparation. Save the complete prepared JSON privately and inspect it
 before --apply --preview. It may contain configuration secrets. Apply cannot
 select a new source/manifest or download a replacement for missing staged data.
 No native plugins are installed. Source packages cannot supply executable adapters.
@@ -218,16 +229,15 @@ function parseRepositories(args) {
   const result={command:args[0]==='wrap'?'adopt':args[0]},seen=new Set();
   for(let i=1;i<args.length;i++) {
     const flag=args[i];
-    if(!['--workspace','--manifest','--choices','--apply','--preview','--network','--json'].includes(flag) || seen.has(flag))fail('cli.arguments');
+    if(!['--workspace','--manifest','--choices','--apply','--preview','--json'].includes(flag) || seen.has(flag))fail('cli.arguments');
     seen.add(flag);
     if(flag==='--json')continue;
     if(flag==='--apply'){result.apply=true;continue;}
-    if(flag==='--network'){result.network=true;continue;}
     const value=args[++i];if(value===undefined || value.startsWith('--'))fail('cli.arguments');
     result[{'--workspace':'workspace','--manifest':'manifestPath','--choices':'choicesFile','--preview':'previewFile'}[flag]]=absoluteRoot(value);
   }
   if(!result.workspace)fail('cli.workspace-required');
-  if(result.apply?(!result.previewFile || result.choicesFile || result.manifestPath || result.network):(!result.choicesFile || result.previewFile))fail('cli.arguments');
+  if(result.apply?(!result.previewFile || result.choicesFile || result.manifestPath):(!result.choicesFile || result.previewFile))fail('cli.arguments');
   return result;
 }
 
@@ -235,12 +245,11 @@ function parseLifecycle(args) {
   const result={command:args[0]},seen=new Set(),maintenance=['repair','remove'].includes(args[0]);
   for(let i=1;i<args.length;i++) {
     const flag=args[i];
-    const allowed=['--workspace','--apply','--preview','--json',...(result.command==='update'?['--accept-rebind']:[]),...(result.command==='continue'?['--recovery']:maintenance?result.command==='remove'?['--providers','--bundles']:[]:['--manifest','--network'])];
+    const allowed=['--workspace','--apply','--preview','--json',...(result.command==='update'?['--accept-rebind']:[]),...(result.command==='continue'?['--recovery']:maintenance?result.command==='remove'?['--providers','--bundles']:[]:['--manifest'])];
     if(!allowed.includes(flag) || seen.has(flag))fail('cli.arguments');
     seen.add(flag);
     if(flag==='--json')continue;
     if(flag==='--apply'){result.apply=true;continue;}
-    if(flag==='--network'){result.network=true;continue;}
     const value=args[++i];if(value===undefined || value.startsWith('--'))fail('cli.arguments');
     if(flag==='--recovery') {
       if(!/^\.pipeline\/transactions\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\/recovery\.json$(?![\s\S])/.test(value))fail('recovery.path');
@@ -260,7 +269,7 @@ function parseLifecycle(args) {
   }
   if(!result.workspace)fail('cli.workspace-required');
   if(result.rebindFile && (result.apply || result.manifestPath))fail('cli.arguments');
-    if(result.apply?(!result.previewFile || result.manifestPath || result.network || result.providers || result.bundles):result.previewFile)fail('cli.arguments');
+    if(result.apply?(!result.previewFile || result.manifestPath || result.providers || result.bundles):result.previewFile)fail('cli.arguments');
   if(result.command==='switch' && !result.apply && !result.manifestPath)fail('switch.manifest-required');
   if(result.command==='continue' && (result.apply?result.recoveryPath:!result.recoveryPath))fail('continuation.recovery-required');
   return result;
@@ -277,7 +286,7 @@ async function runLifecycle(command,registry,stdout,stderr,compatibility) {
   if(!command.apply) {
     const input={command:command.command,wrapper:command.workspace};
     if(command.manifestPath)input.manifestPath=command.manifestPath;
-    if(command.network)input.network=true;
+    if(['setup','update','switch'].includes(command.command))input.network=true;
     if(command.providers)input.providers=command.providers;
     if(command.bundles)input.bundles=command.bundles;
     if(command.recoveryPath)input.recoveryPath=command.recoveryPath;
@@ -401,7 +410,7 @@ async function runLogs(command,stdout,stderr) {
   }finally{await lock.release();}
 }
 
-export async function runCli(args,{stdout,stderr,registry=null,compatibility=null}) {
+export async function runCli(args,{stdout,stderr,registry=null,compatibility=null,desiredHostOptions={}}) {
   if(typeof stdout!=='function' || typeof stderr!=='function')fail('cli.transport');
   try {
     const command=parseCommand(args);
@@ -420,7 +429,9 @@ export async function runCli(args,{stdout,stderr,registry=null,compatibility=nul
       ['recover-bootstrap','continue-bootstrap','retire-bootstrap'].includes(command.action)?runBootstrapContinuation:runRepositoryRecovery)(command,stdout);
     if(['setup','update','repair','remove','switch','continue'].includes(command.command))return await runLifecycle(command,registry,stdout,stderr,compatibility);
     const options=command.recoveryPath===undefined?{}:{recoveryPath:command.recoveryPath};
-    const result=await doctorCompatibility(await inspectInstallation(command.workspace,options),compatibility);
+    const desired=await inspectDesiredInstallation(command.workspace,desiredHostOptions);
+    if(desired && command.recoveryPath!==undefined)fail('desired.legacy-recovery-option');
+    const result=desired??await doctorCompatibility(await inspectInstallation(command.workspace,options),compatibility);
     await stdout(JSON.stringify(result)+'\n');
     return result.ready?0:1;
   } catch(error) {

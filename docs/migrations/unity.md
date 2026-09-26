@@ -7,7 +7,7 @@ synthetic testing; independent review and real deployment approval remain pendin
 
 `workspace-pipeline migration unity preview --workspace <absolute-wrapper> --manifest <absolute-manifest>`
 prepares the complete proposal, staging committed Git source outside the wrapper.
-Add `--network` only to permit remote acquisition. Keep the JSON private: it can
+Selecting a remote Git source permits acquisition during preparation. Keep the JSON private: it can
 contain full config bytes. The command does not disable plugins or install files.
 
 `workspace-pipeline migration unity inspect --workspace <absolute-wrapper> --recovery <relative-record> --phase <phase>`
