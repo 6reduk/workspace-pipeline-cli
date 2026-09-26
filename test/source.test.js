@@ -159,6 +159,30 @@ test('remote auth configuration stays user-controlled; source Git environment ca
     assert.equal(local.GIT_CONFIG_SYSTEM,undefined);
   } finally {for(const k of keys)if(before[k]===undefined)delete process.env[k];else process.env[k]=before[k];}
 });
+// signal 0 also succeeds for Linux zombies: they are dead, but not yet reaped
+// by their parent. Do not confuse PID-table presence with executable liveness.
+async function assertProcessStopped(pid,{timeoutMs=1000}={}) {
+  const deadline=performance.now()+timeoutMs;
+  while(true) {
+    try { process.kill(pid,0); }
+    catch(e) { if(e.code==='ESRCH')return;throw e; }
+    if(process.platform==='linux') {
+      let info;
+      try { info=await readFile('/proc/'+pid+'/stat','utf8'); }
+      catch(e) { if(e.code==='ENOENT')return;throw e; }
+      const state=info.slice(info.lastIndexOf(')')+2).split(' ')[0];
+      if(state==='Z'||state==='X')return;
+    }
+    assert.ok(performance.now()<deadline,'SSH helper is still running after termination');
+    await new Promise(resolve=>setTimeout(resolve,20));
+  }
+}
+
+test('termination assertion rejects a live process',async()=>{
+  await assert.rejects(()=>assertProcessStopped(process.pid,{timeoutMs:20}),
+    e=>e.code==='ERR_ASSERTION'&&/still running/.test(e.message));
+});
+
 test('deadline stops a running synthetic SSH helper',async()=>{
   const f=await fixture(),helper=path.join(f.root,'slow-ssh.cjs'),pidFile=path.join(f.root,'pid');
   await writeFile(helper,"require('node:fs').writeFileSync("+JSON.stringify(pidFile)+",String(process.pid));setTimeout(()=>process.exit(0),6000);");
@@ -168,7 +192,7 @@ test('deadline stops a running synthetic SSH helper',async()=>{
     await rejectsCode(()=>runGit(f.repo,['-c','ssh.variant=ssh','ls-remote','--','ssh://git@fixture.invalid/repo','HEAD'],
       {network:true,deadline:performance.now()+1500}),'source.timeout');
     const pid=Number(await readFile(pidFile,'utf8'));
-    assert.throws(()=>process.kill(pid,0),e=>e.code==='ESRCH');
+    await assertProcessStopped(pid);
   } finally {if(previous===undefined)delete process.env.GIT_SSH_COMMAND;else process.env.GIT_SSH_COMMAND=previous;}
 });
 test('bare local remote and nested package use same committed content',async()=>{
