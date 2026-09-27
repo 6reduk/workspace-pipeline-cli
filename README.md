@@ -1,17 +1,86 @@
 # Workspace Pipeline CLI
 
-## Desired-state installation (0.7.0 release candidate)
+## Quick start — установка за несколько команд
 
-The working tree adds manifest schema 2: ordinary `setup --source ... --adapters ...`
-creates `workspace.json` after confirmation; `update` uses it without a separate
-preview file. Whole-owned adapter contents are replaced, including custom files;
-backups are opt-in with `--backup`. Shared configurations change only declared fields.
-See [setup, update, doctor and source authoring](docs/desired-state.md).
-This is not in the published 0.6.0 package. The sections below describe the legacy
-release and explicit recovery routes; do not mix their backup/preview contracts
-with schema 2.
+Нужны Node.js 22+ (с npm) и Git. Глобальная установка CLI не нужна: команды ниже
+запускают опубликованный `@6reduk/workspace-pipeline@0.7.0` через `npx`.
+Пример — Unity pipeline для Codex и Claude/Grok; замените путь workspace на свой.
+
+### 1. Подготовить папку и установить
+
+Workspace — папка-обёртка. Создайте её и разместите свой Git-репозиторий в
+`C:\Work\MyGame\project`, с документацией в `project/docs`. Эта команда не клонирует
+и не перемещает проект; она устанавливает только pipeline и настройки адаптеров.
+
+```powershell
+npx --yes @6reduk/workspace-pipeline@0.7.0 setup --workspace "C:\Work\MyGame" --source "https://github.com/6reduk/unity-sdd-pipeline.git" --ref main --subdirectory pipelines/unity --adapters codex,claude-grok
+```
+
+Проверьте показанные пути и настройки, подтвердите установку. Можно выбрать только
+`codex` или только `claude-grok`. Для другого pipeline укажите его Git source,
+подкаталог и adapter IDs. Другая структура репозиториев задаётся через
+`--repository` / `--documentation` — см. [подробный setup](docs/desired-state.md#first-installation--no-prepared-json-file-required).
+Сохранённый `workspace.json` позволяет дальше обходиться без повторного указания source.
+
+### 2. Посмотреть состояние и установленную версию pipeline
+
+```powershell
+npx --yes @6reduk/workspace-pipeline@0.7.0 doctor --workspace "C:\Work\MyGame"
+```
+
+Строка `Pipeline` показывает установленную версию, `Providers` — провайдеров,
+диагностика — отсутствующие, изменённые и лишние файлы. `doctor` не ищет новые
+выпуски и не проверяет работу моделей/MCP. Для полного отчёта добавьте `--json`.
+Версия **CLI** в этих командах зафиксирована как `0.7.0`; это не версия pipeline.
+Последнюю опубликованную версию CLI можно узнать без установки:
+
+```powershell
+npm view @6reduk/workspace-pipeline version
+```
+
+### 3. Обновить
+
+```powershell
+npx --yes @6reduk/workspace-pipeline@0.7.0 update --workspace "C:\Work\MyGame"
+```
+
+Команда получает состояние Git ref из `workspace.json` (в примере — `main`),
+показывает изменения и спрашивает подтверждение. JSON preview-файл не нужен.
+После обновления повторите `doctor` и начните новые сессии harness из workspace.
+
+### 4. Удалить pipeline / очистить его поставку
+
+```powershell
+npx --yes @6reduk/workspace-pipeline@0.7.0 remove --workspace "C:\Work\MyGame"
+```
+
+После подтверждения удаляются записанная поставка и её локальные настройки,
+включая пользовательские файлы внутри каталогов, целиком принадлежащих адаптеру.
+**Проектные репозитории не удаляются.** `workspace.json`, журналы, прежние backups
+и общие глобальные настройки Grok сохраняются. Неучтённые старые плагины команда
+не удаляет. Для повторной установки выполните `update` из шага 3.
+
+Чтобы восстановить **установленную**, а не новую версию, используйте:
+
+```powershell
+npx --yes @6reduk/workspace-pipeline@0.7.0 reset --workspace "C:\Work\MyGame"
+```
+
+**Важно:** setup/update/reset заменяют управляемые файлы; remove удаляет их.
+Кастомизации внутри целиком управляемых каталогов будут потеряны. Backup по
+умолчанию выключен; добавьте `--backup`, если нужна копия. Сначала используйте
+`doctor`, чтобы увидеть отклонения. Общие конфиги меняются только по объявленным
+полям; глобальные изменения явно показаны и могут влиять на другие workspace.
+`--yes` сразу после `npx` разрешает загрузку npm-пакета, а не изменения workspace:
+CLI всё равно спросит подтверждение. MCP из поставки может стартовать при запуске harness.
+
+Подробности: [desired-state lifecycle](docs/desired-state.md),
+[журналы и их очистка](docs/retention.md), [разработка pipeline source](docs/desired-state.md#for-pipeline-authors).
 
 ## Published legacy lifecycle
+
+The material in this section describes older schema-1/advanced routes. For normal
+schema-2 installation use the quick start above; do not mix preview/backup contracts.
 
 Everyday update: `workspace-pipeline update --workspace <directory>` shows the
 changes and asks for confirmation. Use `--yes` for unattended application or
