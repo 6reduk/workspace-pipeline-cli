@@ -11,6 +11,7 @@ import {includeRetiredTargets} from './retirement.js';
 import {inspectDesiredFiles} from './inventory.js';
 import {parseDesiredWorkspace} from './source.js';
 import {inspectDesiredLock} from './lock-recovery.js';
+import {inspectOpenSpec,inspectRemovedOpenSpec} from '../integrations/openspec.js';
 
 const paths={
   'codex.workspace':'.codex/config.toml','claude.workspace':'.claude/settings.local.json',
@@ -41,7 +42,7 @@ export async function inspectDesiredInstallation(workspace,{userHome=homedir(),p
   const records=await readDesiredRecords(workspace),record=(records.pending??records.installed).value;
   if(record.intent==='removed')return {workspace,ready:false,status:'not-installed',
     pipeline:{...record.pipeline,providers:[]},binding:record.binding??null,configuration:'not-installed',
-    diagnostics:[{code:'desired.not-installed',subject:installedPath}],globalSettings:'preserved',
+    diagnostics:[{code:'desired.not-installed',subject:installedPath},...(record.openspec?await inspectRemovedOpenSpec(workspace):[])],globalSettings:'preserved',
     limits:'Delivery removed; saved workspace declaration and shared user settings were preserved. No runtime checks.'};
   const diagnostics=[];
   const locks=[];
@@ -99,8 +100,10 @@ export async function inspectDesiredInstallation(workspace,{userHome=homedir(),p
       diagnostics.push({code:error instanceof ContractError?error.code:'desired.config-read',subject:setting.target,pointer:setting.pointer});
     }
   }
+  const openspec=await inspectOpenSpec(workspace,record.openspec,record.binding,record.providers);
+  if(openspec)diagnostics.push(...openspec.diagnostics);
   return {workspace,ready:diagnostics.length===0,status:records.pending?'incomplete':diagnostics.length?'drift':'ready',
     pipeline:{...record.pipeline,providers:record.providers},binding:record.binding??null,configuration:diagnostics.length?'fail':'pass',
-    diagnostics,files,settings,locks,backupDefault:false,
+    diagnostics,files,settings,locks,openspec,backupDefault:false,
     limits:'Installed-record comparison only; no source authenticity, runtime, model-visible skills or MCP certification.'};
 }

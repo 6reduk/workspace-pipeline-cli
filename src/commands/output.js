@@ -12,6 +12,7 @@ export function formatResult(value) {
     if (value.pipeline) lines.push(`Pipeline: ${safe(value.pipeline.id)} @ ${safe(value.pipeline.version)}`,
       `Providers: ${value.pipeline.providers.map(safe).join(', ')}`);
     for (const key of ['configuration', 'transactionEvidence']) if (value[key] !== undefined) lines.push(`${key}: ${safe(value[key])}`);
+    if(value.openspec)lines.push(`OpenSpec: ${safe(value.openspec.version)} (${safe(value.openspec.status)}; workspace-local)`);
     if(value.binding) lines.push(`Git source: ${safe(value.binding.source.url??value.binding.source.path)}`,
       `Git revision: ${safe(value.binding.commit)}`, `Source digest: ${safe(value.binding.digest)}`);
     if(value.files) {

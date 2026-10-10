@@ -14,6 +14,7 @@ import {includeRetiredTargets} from './retirement.js';
 import {bindDesiredSource} from './binding.js';
 import {observeTargets} from '../operations/state.js';
 import {prepareDesiredRemoval} from './removal.js';
+import {openSpecPlan,syncOpenSpec,preflightOpenSpec,assertOpenSpecRemoval} from '../integrations/openspec.js';
 
 const digest=bytes=>'sha256:'+createHash('sha256').update(bytes).digest('hex');
 const depth=name=>name.split('/').length;
@@ -24,6 +25,7 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
   if(typeof backup!=='boolean' || !Array.isArray(protectedPaths))fail('desired.apply-options');
   const removing=hostOptions.removeExisting===true;
   const compiled=removing?null:compileDesiredManifest(manifest,{selected,protectedPaths});
+  const openspec=removing?null:openSpecPlan(compiled,binding);
   const delivered=removing?null:materializeDesiredFiles(compiled,source);
   if(!removing)binding=bindDesiredSource(binding,source);
   const lock=await acquireWorkspaceLock(workspace,{purpose:'desired-state'});
@@ -41,6 +43,7 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
     const protectedDuringMigration=[...new Set([...protectedPaths,...previousRoots,...(records.legacy?.protectedPaths??[])])];
     if(!removing)compileDesiredManifest(manifest,{selected,protectedPaths:protectedDuringMigration});
     const removal=removing?await prepareDesiredRemoval(workspace,records,protectedDuringMigration):null;
+    if(!openspec&&(records.installed?.value.openspec||records.pending?.value.openspec))await assertOpenSpecRemoval(workspace);
     if(removal?.alreadyRemoved)return {status:'removed',mutations:0,backupDirectory:null,globalSettings:'preserved'};
     const retirement=removal??includeRetiredTargets(records.installed?.value??records.legacy?.ownership,compiled,delivered,protectedDuringMigration);
     const desired=retirement.desired;
@@ -52,6 +55,14 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
     const next=removal?.next??installationRecord(compiled,delivered,{protectedPaths,binding,
       globalConfigPath:compiled.settings.some(op=>op.target==='grok.user')?global?.path??null:null});
     assertDesiredTransition(records,next);
+    await preflightOpenSpec(workspace,openspec,compiled);
+    const hasOpenSpec=Boolean(openspec||records.installed?.value.openspec||records.pending?.value.openspec);
+    let openSpecResult=null;
+    async function finishOpenSpec(){
+      if(!hasOpenSpec)return;
+      mutations++; // A failed generator/install can already have changed private runtime.
+      openSpecResult=await syncOpenSpec(lock,openspec,{backup,openSpecRun:hostOptions.openSpecRun});
+    }
     const createDescriptor=!removing && hostOptions.createDescriptor===true;
     if(createDescriptor) {
       if(!binding)fail('desired.setup-binding-required');
@@ -67,10 +78,11 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
     const changedSettings=settings.filter(item=>item.changed);
     const filesChanged=Boolean(report.extra.length || report.modified.length || report.missing.length);
     if(!filesChanged && !changedSettings.length && !global?.changed) {
-      const pendingHash=createDescriptor||removing?await beginDesiredInstall(lock,records,next):records.pending?.hash??null;
+      const pendingHash=createDescriptor||removing||hasOpenSpec?await beginDesiredInstall(lock,records,next):records.pending?.hash??null;
       await saveDescriptor();
+      await finishOpenSpec();
       await completeDesiredInstall(lock,records,next,pendingHash);
-      return {status:removing?'removed':mutations?'applied':'unchanged',backupDirectory:null,mutations,...(removing?{globalSettings:'preserved'}:{})};
+      return {status:removing?'removed':mutations?'applied':'unchanged',backupDirectory:openSpecResult?.backupDirectory??null,mutations,...(openSpecResult?{openspec:openSpecResult}:{}),...(removing?{globalSettings:'preserved'}:{})};
     }
     const expected=new Map(desired.entries.map(e=>[e.path,e]));
     const current=[...report.extra,
@@ -161,9 +173,10 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
     if(!after.ready || after.extra.length || after.modified.length || after.missing.length)fail('desired.readback');
     const settingsAfter=await prepareLocalSettings(workspace,localOperations);
     if(settingsAfter.some(item=>item.changed))fail('desired.config-readback');
+    await finishOpenSpec();
     await hostOptions.boundary?.('before-record');
     await completeDesiredInstall(lock,records,next,pendingHash);
-    return {status:removing?'removed':'applied',backupDirectory,globalBackupDirectory,globalConfigPath:global?.path??null,mutations,...(removing?{globalSettings:'preserved'}:{})};
+    return {status:removing?'removed':'applied',backupDirectory:backupDirectory??openSpecResult?.backupDirectory??null,globalBackupDirectory,globalConfigPath:global?.path??null,mutations,...(openSpecResult?{openspec:openSpecResult}:{}),...(removing?{globalSettings:'preserved'}:{})};
   } catch(error) {
     // Partial application is explicit; there is no implicit rollback promise.
     error.desiredState={status:mutations?'partial':'not-applied',mutations,backupDirectory,globalBackupDirectory};

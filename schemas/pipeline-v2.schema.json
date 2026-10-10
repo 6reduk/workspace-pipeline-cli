@@ -7,6 +7,19 @@
     "schemaVersion": {"const": 2},
     "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
     "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+    "integrations": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "openspec": {
+          "type": "object", "additionalProperties": false,
+          "required": ["version", "repository"],
+          "properties": {
+            "version": {"const": "1.14.1"},
+            "repository": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"}
+          }
+        }
+      }
+    },
     "files": {"$ref": "#/properties/adapters/additionalProperties/properties/files"},
     "adapters": {
       "type": "object", "minProperties": 1,

@@ -14,6 +14,7 @@ const validate=new Ajv2020({strict:true}).compile({type:'object',additionalPrope
   required:['schemaVersion','operationHash','pipeline','providers','scopes','files','settings'],properties:{
     schemaVersion:{const:1},operationHash:hash,binding:{type:'object'},
     intent:{enum:['remove','removed']},
+    openspec:{type:'object',additionalProperties:false,required:['version','repository'],properties:{version:{const:'1.14.1'},repository:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'}}},
     adapters:{type:'array',minItems:1,uniqueItems:true,items:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'}},
     pipeline:{type:'object',additionalProperties:false,required:['id','version'],properties:{id:{type:'string'},version:{type:'string'}}},
     providers:{type:'array',uniqueItems:true,items:{enum:['codex','claude','grok','kimi']}},
@@ -28,6 +29,7 @@ export function installationRecord(compiled,desired,{protectedPaths,globalConfig
   const provenance=binding===undefined?{}:{binding:validateDesiredBinding(binding)};
   return {schemaVersion:1,operationHash:contractDigest({compiled,files,protectedPaths,globalConfigPath,...provenance}),...provenance,
     pipeline:compiled.pipeline,adapters:compiled.adapters,providers:compiled.providers,scopes:desired.scopes,files,
+    ...(compiled.openspec?{openspec:compiled.openspec}:{}),
     settings:compiled.settings.map(s=>({target:s.target,pointer:s.pointer,operation:s.operation,
       valueHash:s.operation==='set'?contractDigest(s.value):null}))};
 }

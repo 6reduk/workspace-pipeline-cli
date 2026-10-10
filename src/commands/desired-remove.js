@@ -8,6 +8,7 @@ import {prepareLocalSettings} from '../desired-state/local-settings.js';
 import {applyDesiredFiles} from '../desired-state/apply-files.js';
 import {desiredArguments} from './desired-setup.js';
 import {safeTerminalText as safe} from './output.js';
+import {preflightOpenSpec,assertOpenSpecRemoval} from '../integrations/openspec.js';
 
 export async function tryDesiredRemove(args,options,{isTTY=false,confirm,display,hostOptions={}}={}) {
   if(args[0]!=='remove')return null;
@@ -22,16 +23,23 @@ export async function tryDesiredRemove(args,options,{isTTY=false,confirm,display
     if(dry&&yes)fail('cli.arguments');
     if(!dry&&!yes&&(!isTTY||!confirm))fail('cli.confirmation-required');
     const records=await readDesiredRecords(workspace),prepared=await prepareDesiredRemoval(workspace,records);
+    if(records.installed?.value.openspec||records.pending?.value.openspec)await assertOpenSpecRemoval(workspace);
     if(prepared.alreadyRemoved){await options.stdout(JSON.stringify({workspace,status:'removed',applied:false,globalSettings:'preserved'})+'\n');return 0;}
     const files=await inspectDesiredFiles(workspace,prepared.desired);
+    const openspec=await preflightOpenSpec(workspace,null);
     const local=await prepareLocalSettings(workspace,prepared.settings);
     const summary={command:'remove',workspace,status:'preview',applied:false,files,
+      openspec:openspec&&openspec.status!=='removed'?{scopes:openspec.scopes,preservePlanning:true}:null,
       localSettings:local.map(s=>({path:s.path,changed:s.changed})),backup:seen.has('--backup'),globalSettings:'preserved',
       preserved:['workspace.json','project repositories','.pipeline journals and backups']};
     if(dry){await options.stdout(JSON.stringify(summary)+'\n');return files.ready?0:1;}
     const lines=['Workspace Pipeline — remove',`Workspace: ${safe(workspace)}`,`Backup: ${summary.backup?'enabled':'OFF'}`,
       'Remove all recorded adapter files, including custom files inside owned directories.',
       'Preserve repositories, workspace.json, journals/backups and shared global settings.'];
+    if(openspec&&openspec.status!=='removed'){
+      lines.push('Remove local OpenSpec runtime and recorded skill directories; preserve specs, changes and project config.');
+      for(const scope of openspec.scopes)lines.push(`  OpenSpec remove: ${safe(scope)}`);
+    }
     for(const item of files.extra)lines.push(`  remove: ${safe(item.path)}`);
     for(const item of files.blocked)lines.push(`  blocked: ${safe(item.path)}`);
     for(const item of summary.localSettings)lines.push(`  settings: ${safe(item.path)} (${item.changed?'remove owned fields':'unchanged'})`);

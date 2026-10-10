@@ -77,6 +77,20 @@ CLI всё равно спросит подтверждение. MCP из пос
 Подробности: [desired-state lifecycle](docs/desired-state.md),
 [журналы и их очистка](docs/retention.md), [разработка pipeline source](docs/desired-state.md#for-pipeline-authors).
 
+## OpenSpec workspace (CLI 0.8.0)
+
+[OpenSpec integration](docs/openspec.md) is available starting with CLI 0.8.0.
+The legacy-source examples above remain pinned to 0.7.0. For a new OpenSpec
+workspace use the command below after the 0.8.0 release is available. Existing
+Unity workspaces and active changes are not migrated automatically.
+
+```powershell
+npx --yes @6reduk/workspace-pipeline@0.8.0 setup --workspace "C:\Work\MyGame" --source "https://github.com/6reduk/unity-sdd-pipeline.git" --ref main --subdirectory pipelines/unity-openspec --adapters codex,claude-grok
+```
+
+Place the existing project repository in `C:\Work\MyGame\project` first. Use
+CLI 0.8.0 for subsequent update/doctor/reset/remove on this OpenSpec workspace.
+
 ## Published legacy lifecycle
 
 The material in this section describes older schema-1/advanced routes. For normal
