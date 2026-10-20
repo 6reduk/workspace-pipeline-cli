@@ -13,6 +13,12 @@ export function formatResult(value) {
       `Providers: ${value.pipeline.providers.map(safe).join(', ')}`);
     for (const key of ['configuration', 'transactionEvidence']) if (value[key] !== undefined) lines.push(`${key}: ${safe(value[key])}`);
     if(value.openspec)lines.push(`OpenSpec: ${safe(value.openspec.version)} (${safe(value.openspec.status)}; workspace-local)`);
+    if(value.openspec?.store){
+      const store=value.openspec.store;
+      lines.push(`OpenSpec store: ${safe(store.id)}; planning repository ${safe(store.repository)} (${safe(store.root)})`);
+      for(const item of store.bindings??[])lines.push(`  ${safe(item.repository)}: ${safe(item.path)} (${safe(item.ownership)})`);
+      lines.push('Store bindings do not approve tasks or expand implementation scope.');
+    }
     if(value.binding) lines.push(`Git source: ${safe(value.binding.source.url??value.binding.source.path)}`,
       `Git revision: ${safe(value.binding.commit)}`, `Source digest: ${safe(value.binding.digest)}`);
     if(value.files) {
@@ -29,7 +35,10 @@ export function formatResult(value) {
       `Native compatibility inspection: ${safe(value.compatibility.native?.status??'not-run')}.`,
       'Native discovery is not model/agent/MCP execution certification.');
     lines.push('', `Diagnostics: ${value.diagnostics.length}`);
-    for (const item of value.diagnostics) lines.push(`  - ${safe(item.code)}${item.subject ? ': ' + safe(item.subject) : ''}${item.pointer ? ' ' + safe(item.pointer) : ''}`);
+    for (const item of value.diagnostics) {
+      lines.push(`  - ${safe(item.code)}${item.repository?' ['+safe(item.repository)+']':''}${item.subject ? ': ' + safe(item.subject) : ''}${item.pointer ? ' ' + safe(item.pointer) : ''}`);
+      if(item.hint)lines.push(`    ${safe(item.hint)}`);
+    }
     lines.push('', 'Runtime / model-visible skills / MCP: not verified by doctor.',
       'Full report: repeat with --json.');
     return lines.join('\n') + '\n';

@@ -14,7 +14,7 @@ import {includeRetiredTargets} from './retirement.js';
 import {bindDesiredSource} from './binding.js';
 import {observeTargets} from '../operations/state.js';
 import {prepareDesiredRemoval} from './removal.js';
-import {openSpecPlan,syncOpenSpec,preflightOpenSpec,assertOpenSpecRemoval} from '../integrations/openspec.js';
+import {openSpecPlan,syncOpenSpec,preflightOpenSpec,assertOpenSpecRemoval,openSpecContext} from '../integrations/openspec.js';
 
 const digest=bytes=>'sha256:'+createHash('sha256').update(bytes).digest('hex');
 const depth=name=>name.split('/').length;
@@ -33,6 +33,7 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
   let backupDirectory=null,globalBackupDirectory=null,global=null,mutations=0;
   try {
     const records=await readDesiredRecords(workspace,{allowLegacyMigration:hostOptions.migrateLegacy===true});
+    const openspecContext=openSpecContext(records,binding);
     if(hostOptions.expectedRecords &&
         (hostOptions.expectedRecords.installed!==(records.installed?.hash??null) ||
          hostOptions.expectedRecords.pending!==(records.pending?.hash??null)))fail('desired.installation-state-changed');
@@ -43,7 +44,7 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
     const protectedDuringMigration=[...new Set([...protectedPaths,...previousRoots,...(records.legacy?.protectedPaths??[])])];
     if(!removing)compileDesiredManifest(manifest,{selected,protectedPaths:protectedDuringMigration});
     const removal=removing?await prepareDesiredRemoval(workspace,records,protectedDuringMigration):null;
-    if(!openspec&&(records.installed?.value.openspec||records.pending?.value.openspec))await assertOpenSpecRemoval(workspace);
+    if(!openspec&&(records.installed?.value.openspec||records.pending?.value.openspec))await assertOpenSpecRemoval(workspace,openspecContext);
     if(removal?.alreadyRemoved)return {status:'removed',mutations:0,backupDirectory:null,globalSettings:'preserved'};
     const retirement=removal??includeRetiredTargets(records.installed?.value??records.legacy?.ownership,compiled,delivered,protectedDuringMigration);
     const desired=retirement.desired;
@@ -55,13 +56,13 @@ export async function applyDesiredFiles({workspace,manifest,selected,protectedPa
     const next=removal?.next??installationRecord(compiled,delivered,{protectedPaths,binding,
       globalConfigPath:compiled.settings.some(op=>op.target==='grok.user')?global?.path??null:null});
     assertDesiredTransition(records,next);
-    await preflightOpenSpec(workspace,openspec,compiled);
+    await preflightOpenSpec(workspace,openspec,compiled,openspecContext);
     const hasOpenSpec=Boolean(openspec||records.installed?.value.openspec||records.pending?.value.openspec);
     let openSpecResult=null;
     async function finishOpenSpec(){
       if(!hasOpenSpec)return;
       mutations++; // A failed generator/install can already have changed private runtime.
-      openSpecResult=await syncOpenSpec(lock,openspec,{backup,openSpecRun:hostOptions.openSpecRun});
+      openSpecResult=await syncOpenSpec(lock,openspec,{backup,openSpecRun:hostOptions.openSpecRun,boundary:hostOptions.boundary,...openspecContext});
     }
     const createDescriptor=!removing && hostOptions.createDescriptor===true;
     if(createDescriptor) {

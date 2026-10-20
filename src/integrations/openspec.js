@@ -2,9 +2,10 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {mkdir,readFile,writeFile,readdir,lstat,unlink,rmdir,mkdtemp} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {fail,parse} from '../contracts/parse.js';
+import {fail,parse,ContractError} from '../contracts/parse.js';
 import {inspectDirectory} from '../workspace/paths.js';
 import {assertLockHeld} from '../operations/lock.js';
+import {compileStore,prepareStore,storeIntents,storeSummary,applyStoreKeys,inspectStoreRegistry,storeFile} from './openspec-store.js';
 
 export const OPENSPEC_VERSION='1.14.1';
 const integrity='sha512-IU9ggB7UYMDU47S0R59NH2ngJp+CK2X/r1B8+QU2Fm8LLBPFatQRO1Ia7B8nO3FHbTE7xRXAIs9NcuUF8Beeag==';
@@ -33,7 +34,14 @@ export function openSpecPlan(compiled,binding) {
   const scopes=tools.flatMap(t=>skillNames.map(n=>`${t==='codex'?'.agents':'.claude'}/skills/${n}`));
   if(tools.includes('codex'))scopes.push('.agents/skills/.openspec-target');
   for(const mapping of compiled.files)if(scopes.some(s=>overlap(s.toLowerCase(),mapping.target.toLowerCase())))fail('openspec.owner-overlap');
-  return {version:spec.version,repository:spec.repository,root:repository.path,tools,scopes:scopes.sort()};
+  const store=compileStore(spec.store,binding,repository.path,compiled.files);
+  return {version:spec.version,repository:spec.repository,root:repository.path,tools,scopes:scopes.sort(),...(store?{store}:{})};
+}
+export function openSpecContext(records,binding){
+  const previous=records?.installed?.value,initial=records?.pending?.value;
+  const selected=binding??previous?.binding??initial?.binding;
+  const previousPlan=previous?.openspec&&previous.intent!=='removed'?openSpecPlan({openspec:previous.openspec,providers:previous.providers,files:[]},previous.binding):null;
+  return {binding:selected,previousBinding:previous?.binding,previousPlan};
 }
 async function checkedFile(root,relative){
   const f=resolveChild(root,relative);await inspectDirectory(path.dirname(f));
@@ -49,15 +57,17 @@ async function put(root,relative,bytes){
 async function readRecord(root){
   const bytes=await checkedFile(root,recordPath);if(bytes===null)return null;
   const r=parse(bytes.toString('utf8'),'json');
-  if(r.schemaVersion!==1||!['pending','ready','removed'].includes(r.status)||!Array.isArray(r.scopes)||
+  if(![1,2].includes(r.schemaVersion)||!['pending','ready','removed'].includes(r.status)||!Array.isArray(r.scopes)||
     (r.dependencyLockHash!=null&&!/^sha256:[a-f0-9]{64}$/.test(r.dependencyLockHash))||
     r.scopes.some(s=>!allScopes.includes(s))||new Set(r.scopes).size!==r.scopes.length||
     !Array.isArray(r.files)||r.files.some(f=>typeof f.path!=='string'||!/^sha256:[a-f0-9]{64}$/.test(f.hash)||
       !(r.scopes.some(s=>f.path===s||f.path.startsWith(s+'/'))||f.path===home+'/README.md')))fail('openspec.record');
   for(const f of r.files)resolveChild(root,f.path);
+  if(r.schemaVersion===1&&(r.storeBindings||r.storeIdentity||r.plan?.store))fail('openspec.record');
+  if(r.schemaVersion===2&&(!Array.isArray(r.storeBindings)||r.storeBindings.length>512))fail('openspec.record');
   return r;
 }
-export async function preflightOpenSpec(root,plan,compiled){
+export async function preflightOpenSpec(root,plan,compiled,context={}){
   const old=await readRecord(root);
   if(!old&&(await inspectDirectory(resolveChild(root,home))).exists&&(await readdir(resolveChild(root,home))).length)
     fail('openspec.foreign-runtime');
@@ -73,7 +83,11 @@ export async function preflightOpenSpec(root,plan,compiled){
     for(const n of ['specs','changes'])await inspectDirectory(resolveChild(root,prefix+'/'+n));
   }
   for(const scope of old?.scopes??[])await tree(root,scope);
+  await prepareStore(root,plan,old,context);
   return old;
+}
+export async function describeOpenSpecStore(root,plan,context={}){
+  return storeSummary(await prepareStore(root,plan,await readRecord(root),context));
 }
 // Inspection only: absence of ownership metadata never authorizes deletion.
 export async function inspectRemovedOpenSpec(root){
@@ -87,8 +101,8 @@ export async function inspectRemovedOpenSpec(root){
   }
   return diagnostics;
 }
-export async function assertOpenSpecRemoval(root){
-  const old=await preflightOpenSpec(root,null);
+export async function assertOpenSpecRemoval(root,context={}){
+  const old=await preflightOpenSpec(root,null,undefined,context);
   if((!old||old.status==='removed')&&(await inspectRemovedOpenSpec(root)).length)
     fail('openspec.removal-residue');
 }
@@ -156,9 +170,9 @@ async function preparePackage(root,run){
   if(value.packages?.['node_modules/@fission-ai/openspec']?.integrity!==integrity||pkg.version!==OPENSPEC_VERSION)fail('openspec.package-integrity');
   await put(root,home+'/dependency-lock.json',await checkedFile(root,home+'/tool/package-lock.json'));
 }
-export async function syncOpenSpec(lock,plan,{backup=false,openSpecRun=execute}={}){
-  const root=lock.workspace,old=await preflightOpenSpec(root,plan);
-  if(!plan)await assertOpenSpecRemoval(root);
+export async function syncOpenSpec(lock,plan,{backup=false,openSpecRun=execute,boundary,...context}={}){
+  const root=lock.workspace,old=await preflightOpenSpec(root,plan,undefined,context);
+  if(!plan)await assertOpenSpecRemoval(root,context);
   if(!plan&&!old)return null;
   if(!plan&&old.status==='removed')return {status:'removed'};
   await assertLockHeld(lock);
@@ -167,10 +181,14 @@ export async function syncOpenSpec(lock,plan,{backup=false,openSpecRun=execute}=
     if(saved===null||digest(saved)!==old.dependencyLockHash)fail('openspec.lock-drift');
   }
   const scopes=[...new Set([...(old?.scopes??[]),...(plan?.scopes??[])])];
+  const prepared=await prepareStore(root,plan,old,context);
+  const recordVersion=prepared||old?.schemaVersion===2?2:1;
+  const extra=recordVersion===2?{storeBindings:storeIntents(prepared),storeIdentity:prepared?{id:prepared.id,path:prepared.identityPath,hash:prepared.identityHash}:null}:{};
   for(const scope of scopes)await tree(root,scope);
-  await put(root,recordPath,Buffer.from(JSON.stringify({schemaVersion:1,status:'pending',plan,scopes,files:old?.files??[],dependencyLockHash:old?.dependencyLockHash??null},null,2)+'\n'));
+  await put(root,recordPath,Buffer.from(JSON.stringify({schemaVersion:recordVersion,status:'pending',plan,scopes,files:old?.files??[],dependencyLockHash:old?.dependencyLockHash??null,...extra},null,2)+'\n'));
+  await boundary?.('openspec-after-pending');
   let backupDirectory=null;
-  if(backup&&scopes.length){
+  if(backup&&(scopes.length||prepared?.edits.length)){
     const parent=resolveChild(root,'.pipeline/backups');await inspectDirectory(parent);await mkdir(parent,{recursive:true});
     backupDirectory=await mkdtemp(path.join(parent,'openspec-'));
     for(const scope of scopes)for(const f of await tree(root,scope)){
@@ -189,15 +207,34 @@ export async function syncOpenSpec(lock,plan,{backup=false,openSpecRun=execute}=
     const config=(plan.root==='.'?'':plan.root+'/')+'openspec/config.yaml';
     if(await checkedFile(root,config)===null)await put(root,config,Buffer.from('schema: spec-driven\n'));
     for(const name of ['specs','changes']){const dir=resolveChild(root,(plan.root==='.'?'':plan.root+'/')+'openspec/'+name);await inspectDirectory(dir);await mkdir(dir,{recursive:true});}
+    if(plan.store){
+      if(digestNullable(await storeFile(root,prepared.identityPath))!==prepared.identityHash)fail('openspec.store-config-changed');
+      // The registry is private derived state. Recreate it to repair moved workspaces.
+      await erase(root,home+'/data',{runtime:true});
+      await openSpecRun(process.execPath,[resolveChild(root,home+'/tool/node_modules/@fission-ai/openspec/bin/openspec.js'),
+        'store','register',resolveChild(root,plan.root),'--id',plan.store.id,'--yes','--json'],{cwd:resolveChild(root,plan.root),env:isolatedEnv(root)});
+      await boundary?.('openspec-after-register');
+      const observed=await prepareStore(root,plan,await readRecord(root),context);
+      if(!observed?.identityHash)fail('openspec.store-identity-conflict');
+      extra.storeIdentity={id:prepared.id,path:prepared.identityPath,hash:observed.identityHash};
+      await inspectStoreRegistry(root,prepared);
+    }else if(prepared)await erase(root,home+'/data',{runtime:true});
     const prefix=path.relative(resolveChild(root,plan.root),resolveChild(root,home+'/tool')).replaceAll('\\','/');
     files.push({path:home+'/README.md',bytes:Buffer.from(`# Local OpenSpec ${plan.version}\n\n`+
-      `Run OpenSpec commands from repository \`${plan.root}\`, not the wrapper.\n`+
+      (plan.store?`For planning use repository \`${plan.root}\`; for implementation use the explicitly selected service below, never the wrapper.\n`:`Run OpenSpec commands from repository \`${plan.root}\`, not the wrapper.\n`)+
       `Use \`npm exec --prefix "${prefix}" --offline -- openspec <arguments>\` for upstream CLI examples.\n`+
       'Do not patch generated skills. Do not initialize a second root in the wrapper.\n'+
       `For this command process only: OPENSPEC_TELEMETRY=0, OPENSPEC_NO_UPDATE_CHECK=1; `+
       `XDG_CONFIG_HOME and XDG_DATA_HOME are the wrapper's ${home}/config and ${home}/data.\n`+
       'Specs, changes and project config are user documents, not replaceable adapter files.\n')});
+    if(plan.store){
+      const route=files.find(f=>f.path===home+'/README.md');
+      route.bytes=Buffer.concat([route.bytes,Buffer.from('\n## Shared store '+plan.store.id+'\n\nPlanning repository: `'+plan.repository+'` (`'+plan.root+'`).\n'+
+        plan.store.bindings.map(b=>`- ${b.repository}: cwd \`${b.root}\`; \`npm exec --prefix "${path.relative(resolveChild(root,b.root),resolveChild(root,home+'/tool')).replaceAll('\\','/')}" --offline -- openspec <arguments>\``).join('\n')+
+        '\nSelect the explicitly authorized service before implementation. Never choose a service from wrapper cwd or infer expanded scope from shared tasks. After switching cwd, reread status/instructions and record repo, task, blockers, checks and next step in the existing handoff. Tasks are shared, not automatically filtered.\n')]);
+    }
   }
+  await applyStoreKeys(lock,prepared,{backupDirectory,boundary});
   await assertLockHeld(lock);
   for(const scope of scopes)await erase(root,scope);
   for(const f of files)await put(root,f.path,f.bytes);
@@ -208,17 +245,41 @@ export async function syncOpenSpec(lock,plan,{backup=false,openSpecRun=execute}=
   }
   for(const f of files)if(digest(await checkedFile(root,f.path))!==digest(f.bytes))fail('openspec.readback');
   const dependencyLockHash=plan?digest(await checkedFile(root,home+'/dependency-lock.json')):null;
-  await put(root,recordPath,Buffer.from(JSON.stringify({schemaVersion:1,status:plan?'ready':'removed',plan,scopes:plan?.scopes??[],files:files.map(f=>({path:f.path,hash:digest(f.bytes)})),dependencyLockHash},null,2)+'\n'));
-  return {status:plan?'ready':'removed',version:plan?.version,backupDirectory};
+  await boundary?.('openspec-before-ready');
+  if(prepared){
+    const verified=await prepareStore(root,plan,await readRecord(root),context);
+    for(const e of verified.edits)if(digestNullable(e.bytes)!==e.resultHash)fail('openspec.readback');
+    if(plan?.store){
+      if(verified.identityHash!==extra.storeIdentity.hash)fail('openspec.store-identity-conflict');
+      await inspectStoreRegistry(root,verified);
+    }
+  }
+  if(recordVersion===2){
+    extra.storeBindings=(prepared?.edits??[]).filter(e=>e.active).map(({repository,path,key,value,ownership})=>({repository,path,key,value,ownership}));
+    extra.retiredBindings=storeIntents(prepared).filter(e=>!(prepared?.edits.find(b=>b.repository===e.repository)?.active));
+  }
+  await put(root,recordPath,Buffer.from(JSON.stringify({schemaVersion:recordVersion,status:plan?'ready':'removed',plan,scopes:plan?.scopes??[],files:files.map(f=>({path:f.path,hash:digest(f.bytes)})),dependencyLockHash,...extra},null,2)+'\n'));
+  return {status:plan?'ready':'removed',version:plan?.version,backupDirectory,...(prepared?{store:storeSummary(prepared)}:{})};
 }
+const digestNullable=b=>b===null?null:digest(b);
 export async function inspectOpenSpec(root,expected,binding,providers){
-  const diagnostics=[];let record;
+  const diagnostics=[];let record,store;
   try{
     record=await readRecord(root);
     if(!expected&&(!record||record.status==='removed'))return null;
     if(!record||record.status!=='ready')fail('openspec.incomplete');
     if(!expected||record.plan?.version!==expected.version||record.plan?.repository!==expected.repository)fail('openspec.declaration-different');
     const desired=openSpecPlan({openspec:expected,providers,files:[]},binding);
+    if(JSON.stringify(record.plan.store)!==JSON.stringify(desired.store))fail('openspec.declaration-different');
+    if(desired.store){
+      const prepared=await prepareStore(root,desired,record,{binding,previousPlan:desired});store=storeSummary(prepared);
+      if(!prepared.identityHash||prepared.identityHash!==record.storeIdentity?.hash)throw Object.assign(new ContractError('openspec.store-identity-conflict'),{
+        subject:prepared.identityPath,repository:prepared.repository,
+        hint:'Inspect the store identity change against the installed record. Restore the intended identity or explicitly reconcile it before repeating update. Preserve planning documents; do not delete ownership records.'});
+      for(const e of prepared.edits)if(e.beforeHash!==e.resultHash)diagnostics.push({code:'openspec.store-config-drift',subject:e.path,repository:e.repository,
+        hint:'Inspect the owned store key at this path. Run update to restore the declared value; use --backup if you need a copy of the current configuration. Unrelated YAML fields are preserved.'});
+      await inspectStoreRegistry(root,prepared);
+    }
     if(record.plan.root!==desired.root||JSON.stringify(record.scopes)!==JSON.stringify(desired.scopes))fail('openspec.declaration-different');
     for(const scope of desired.scopes){
       const required=scope.endsWith('.openspec-target')?scope:scope+'/SKILL.md';
@@ -234,7 +295,7 @@ export async function inspectOpenSpec(root,expected,binding,providers){
     const p=await checkedFile(root,home+'/tool/node_modules/@fission-ai/openspec/package.json');
     if(p===null||parse(p.toString('utf8'),'json').version!==expected.version)fail('openspec.package-missing');
     if(await checkedFile(root,home+'/tool/node_modules/@fission-ai/openspec/bin/openspec.js')===null)fail('openspec.package-missing');
-  }catch(e){diagnostics.push({code:e.code??'openspec.inspection',subject:recordPath});}
-  return {version:expected?.version??record?.plan?.version,status:diagnostics.length?'not-ready':'ready',diagnostics,
+  }catch(e){diagnostics.push({code:e.code??'openspec.inspection',subject:e.subject??recordPath,...(e.repository?{repository:e.repository}:{}),...(e.hint?{hint:e.hint}:{})});}
+  return {version:expected?.version??record?.plan?.version,status:diagnostics.length?'not-ready':'ready',diagnostics,...(store?{store}:{}),
     limits:'Metadata and generated files only; not full node_modules integrity or model/runtime certification.'};
 }

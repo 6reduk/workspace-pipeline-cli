@@ -14,7 +14,7 @@ const validate=new Ajv2020({strict:true}).compile({type:'object',additionalPrope
   required:['schemaVersion','operationHash','pipeline','providers','scopes','files','settings'],properties:{
     schemaVersion:{const:1},operationHash:hash,binding:{type:'object'},
     intent:{enum:['remove','removed']},
-    openspec:{type:'object',additionalProperties:false,required:['version','repository'],properties:{version:{const:'1.14.1'},repository:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'}}},
+    openspec:{type:'object',additionalProperties:false,required:['version','repository'],properties:{version:{const:'1.14.1'},repository:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'},store:{type:'object',additionalProperties:false,required:['id','implementationRepositories'],properties:{id:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'},implementationRepositories:{type:'array',minItems:1,maxItems:256,uniqueItems:true,items:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'}}}}}},
     adapters:{type:'array',minItems:1,uniqueItems:true,items:{type:'string',pattern:'^[a-z][a-z0-9-]{0,62}$'}},
     pipeline:{type:'object',additionalProperties:false,required:['id','version'],properties:{id:{type:'string'},version:{type:'string'}}},
     providers:{type:'array',uniqueItems:true,items:{enum:['codex','claude','grok','kimi']}},

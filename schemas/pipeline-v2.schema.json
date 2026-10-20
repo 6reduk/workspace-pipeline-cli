@@ -15,7 +15,11 @@
           "required": ["version", "repository"],
           "properties": {
             "version": {"const": "1.14.1"},
-            "repository": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"}
+            "repository": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+            "store": {"type":"object","additionalProperties":false,"required":["id","implementationRepositories"],"properties":{
+              "id":{"type":"string","pattern":"^[a-z][a-z0-9-]{0,62}$"},
+              "implementationRepositories":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"type":"string","pattern":"^[a-z][a-z0-9-]{0,62}$"}}
+            }}
           }
         }
       }

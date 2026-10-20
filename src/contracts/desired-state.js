@@ -50,7 +50,8 @@ export function compileDesiredManifest(text, {selected, protectedPaths=[]}={}) {
     if (settings[i].target===settings[j].target && overlap(settings[i].pointer,settings[j].pointer)) fail('desired.field-overlap');
   }
   return {schemaVersion:2, pipeline:{id:manifest.id,version:manifest.version},
-    ...(manifest.integrations?.openspec?{openspec:manifest.integrations.openspec}:{}),
+    ...(manifest.integrations?.openspec?{openspec:{...manifest.integrations.openspec,
+      ...(manifest.integrations.openspec.store?{store:{...manifest.integrations.openspec.store,implementationRepositories:[...manifest.integrations.openspec.store.implementationRepositories].sort()}}:{})}}:{}),
     adapters:[...selected].sort(),providers:[...providers].sort(),
     files:files.sort((a,b)=>a.target.localeCompare(b.target,'en')),
     settings:settings.sort((a,b)=>(a.target+a.pointer).localeCompare(b.target+b.pointer,'en'))};

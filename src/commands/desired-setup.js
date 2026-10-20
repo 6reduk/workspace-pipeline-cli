@@ -41,6 +41,9 @@ export function initialDescriptor(workspace,parsed,{cwd=process.cwd()}={}) {
   const repos=Object.fromEntries(entries.map(([id,p])=>[id,{path:p,role:'code'}]));
   if(entries.length>1&&!values.has('--documentation'))fail('desired.documentation-required');
   const [repository,docPath]=pair(values.get('--documentation')??entries[0][0]+'=docs');
+  // A separately selected documentation repository is not an implementation
+  // target. Preserve single-repository code+docs setups.
+  if(entries.length>1 && repos[repository])repos[repository].role='documentation';
   const descriptor={schemaVersion:2,pipeline,adapters:values.get('--adapters').split(','),
     layout:{kind:entries.length===1?'single-repo':'multi-repo',repositories:repos,documentation:{repository,path:docPath}}};
   return parseDesiredWorkspace(JSON.stringify(descriptor));

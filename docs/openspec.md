@@ -111,6 +111,53 @@ Raw stderr is deliberately not printed: inherited environment and remote errors
 can contain credentials even with isolated npm config. An unrecognized cause is
 reported as `unclassified`, not guessed.
 
+## Shared planning store (CLI 0.9.0)
+
+The optional `store` capability is prepared for CLI 0.9.0; CLI 0.8.0 rejects
+it. Existing declarations without `store` keep the single-repository behavior.
+Do not use this example with a released CLI until the capability is published.
+
+```json
+"integrations": {
+  "openspec": {
+    "version": "1.14.1",
+    "repository": "docs",
+    "store": {
+      "id": "platform",
+      "implementationRepositories": ["service-a", "service-b"]
+    }
+  }
+}
+```
+
+All names are existing repository IDs in the workspace layout, not file paths.
+The planning repository must be the documentation repository. Services keep their
+code in separate repositories; planning artifacts live once in the documentation
+repository's `openspec/`. The installation does not clone or move repositories.
+
+Normal `setup`/`update` prepares a private registry, project store identity and
+service `openspec/config.yaml` pointers. Users do not supply `--store`, a launcher,
+or a preview JSON file. Generated `.pipeline/openspec/README.md` describes each
+repository cwd and the process-local environment for invoking upstream OpenSpec.
+The coordinator selects a service only within the approved task scope. Tasks are
+shared, not automatically filtered by service; tool readiness is not approval.
+
+Store bindings do not make entire service configs replaceable adapter files.
+Only the added `store` key is owned. Existing matching keys are borrowed, not
+adopted. Other settings, comments, project specs and changes remain protected.
+Conflicting store identities, foreign pointers and service-local planning roots
+(even empty `specs` or `changes` directories) require explicit reconciliation,
+not an automatic migration or deletion.
+
+`doctor` checks bindings without repairing them. `update` restores the local
+registry after moving a whole workspace with the same relative layout. Renaming
+the store or moving its planning repository requires a separate migration.
+Changing a participating service's relative path also requires a separate
+migration; it must not silently leave an owned pointer in the old checkout.
+Removal retires owned pointers and tooling, preserving borrowed pointers and
+the durable docs store identity. Borrowed pointers may then need a new local
+registration before they can be used. Backups remain opt-in with `--backup`.
+
 ## Verification
 
 `node --test test/openspec-integration.test.js` tests lifecycle with a simulated

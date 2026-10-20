@@ -17,7 +17,7 @@ import {desiredArguments,initialDescriptor} from './desired-setup.js';
 import {tryDesiredRemove} from './desired-remove.js';
 import {prepareDesiredReset} from '../desired-state/reset.js';
 import {runDesiredRecovery} from './desired-recover.js';
-import {openSpecPlan,preflightOpenSpec,assertOpenSpecRemoval} from '../integrations/openspec.js';
+import {openSpecPlan,preflightOpenSpec,assertOpenSpecRemoval,openSpecContext,describeOpenSpecStore} from '../integrations/openspec.js';
 
 // V2 entrypoint; null preserves the old CLI path for old descriptors. No new
 // source-supplied executable hooks, model changes or external preview required.
@@ -50,8 +50,10 @@ export async function tryDesiredLifecycle(args,options,{isTTY=false,confirm,disp
       tempRoot:hostOptions.tempRoot,network:descriptor.pipeline?.transport==='remote'});
     const compiled=compileDesiredManifest(prepared.input.manifest,{selected:prepared.input.selected,protectedPaths:prepared.input.protectedPaths});
     const openspec=openSpecPlan(compiled,prepared.input.binding);
-    await preflightOpenSpec(workspace,openspec,compiled);
-    if(!openspec&&(records.installed?.value.openspec||records.pending?.value.openspec))await assertOpenSpecRemoval(workspace);
+    const openSpecContextValue=openSpecContext(records,prepared.input.binding);
+    await preflightOpenSpec(workspace,openspec,compiled,openSpecContextValue);
+    if(!openspec&&(records.installed?.value.openspec||records.pending?.value.openspec))await assertOpenSpecRemoval(workspace,openSpecContextValue);
+    const openspecStore=await describeOpenSpecStore(workspace,openspec,openSpecContextValue);
     const delivered=materializeDesiredFiles(compiled,prepared.input.source);
     const previousRoots=Object.values(records.installed?.value.binding?.layout.repositories??{}).map(r=>r.path);
     const protectedPaths=[...new Set([...prepared.input.protectedPaths,...previousRoots,...(records.legacy?.protectedPaths??[])])];
@@ -66,7 +68,7 @@ export async function tryDesiredLifecycle(args,options,{isTTY=false,confirm,disp
       const result=compileDesiredSettings('grok.user',observed.bytes,globalOps);
       global={path:path.join(home,'.grok/config.toml'),changed:result.changed};
     }
-    const summary={command:args[0],workspace,pipeline:compiled.pipeline,providers:compiled.providers,openspec,
+    const summary={command:args[0],workspace,pipeline:compiled.pipeline,providers:compiled.providers,openspec,openspecStore,
       files,localSettings:local.map(s=>({path:s.path,changed:s.changed})),globalSettings:global,
       backup:seen.has('--backup'),legacyMigration:Boolean(records.legacy),...(prepared.reset?{reset:prepared.reset}:{}),descriptor:{path:'workspace.json',action:creating?'create':'preserve',layout:descriptor.layout},provenance:prepared.provenance,preparation:prepared.preparation};
     if(dry){await options.stdout(JSON.stringify({...summary,status:'preview',applied:false})+'\n');return files.ready?0:1;}
@@ -76,7 +78,13 @@ export async function tryDesiredLifecycle(args,options,{isTTY=false,confirm,disp
       'The entire declared adapter scope will be replaced; custom files in it will be removed.'];
     lines.push(`workspace.json: ${creating?'create':'preserve'}`);
     if(openspec)lines.push(`OpenSpec ${openspec.version}: local npm dependency, core skills for ${openspec.tools.join(', ')}; planning in ${safe(openspec.root)}/openspec.`,
-      'OpenSpec skill directories will be replaced. Project specs, changes and existing config are preserved. npm registry access is required.');
+      'OpenSpec skill directories will be replaced. Project specs, changes and unrelated config fields are preserved. npm registry access is required.');
+    if(openspecStore){
+      lines.push(`OpenSpec store: ${safe(openspecStore.id)}; planning repository ${safe(openspecStore.repository)} (${safe(openspecStore.root)}).`,
+        'Store registry is workspace-local. Store identity and planning documents are preserved. No service is selected for implementation.');
+      for(const item of openspecStore.bindings)lines.push(`  store pointer: ${safe(item.repository)} / ${safe(item.path)} — ${safe(item.action)} (${safe(item.ownership)})`);
+      if(openspecStore.bindings.some(item=>item.ownership==='borrowed'))lines.push('Borrowed store pointers are preserved on removal; they may need registration with another installation.');
+    }
     if(prepared.reset)lines.push(`Reset: ${prepared.reset.mode}, Git revision ${safe(prepared.reset.commit)} (not latest).`);
     for(const [id,repo] of Object.entries(descriptor.layout.repositories))lines.push(`Repository ${safe(id)}: ${safe(repo.path)} (not moved or cloned)`);
     lines.push(`Documentation: ${safe(descriptor.layout.documentation.repository)} / ${safe(descriptor.layout.documentation.path)}`);
@@ -92,6 +100,9 @@ export async function tryDesiredLifecycle(args,options,{isTTY=false,confirm,disp
     await options.stdout(JSON.stringify({...result,...(prepared.reset?{reset:prepared.reset}:{}),provenance:prepared.provenance,preparation:prepared.preparation})+'\n');return 0;
   }catch(error){
     await options.stderr(JSON.stringify({error:error instanceof ContractError?error.code:'cli.desired-io',
+      ...(error instanceof ContractError&&error.subject?{subject:error.subject}:{}),
+      ...(error instanceof ContractError&&error.repository?{repository:error.repository}:{}),
+      ...(error instanceof ContractError&&error.hint?{hint:error.hint}:{}),
       ...(error.commandDiagnostic?{command:error.commandDiagnostic,hint:'Local tool installation failed. Check the reported reason, registry connectivity and free disk space, then repeat the same operation. Raw subprocess output is omitted to protect credentials.'}:{}),
       ...(error.code==='desired.setup-already-configured'?{hint:'workspace.json already exists. Run doctor, then update using the saved declaration; do not repeat setup --source. If an installation was interrupted and the source ref moved, use reset. Finish pending removal with remove first.'}:{}),
       ...(error.code==='desired.finish-remove-before-update'?{hint:'Finish the pending removal with remove before setup, update or reset.'}:{}),

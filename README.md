@@ -91,6 +91,13 @@ npx --yes @6reduk/workspace-pipeline@0.8.0 setup --workspace "C:\Work\MyGame" --
 Place the existing project repository in `C:\Work\MyGame\project` first. Use
 CLI 0.8.0 for subsequent update/doctor/reset/remove on this OpenSpec workspace.
 
+Shared planning across separate service repositories is prepared for **CLI 0.9.0**:
+the pipeline declares one documentation store and participating repository IDs.
+Normal setup/update prepares the bindings; no manual store registration is needed.
+See [shared-store manifest, ownership and removal](docs/openspec.md#shared-planning-store-cli-090).
+Released 0.8.0 does not accept that extension; the existing single-repo examples
+above are unchanged.
+
 ## Published legacy lifecycle
 
 The material in this section describes older schema-1/advanced routes. For normal

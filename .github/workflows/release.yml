@@ -35,6 +35,8 @@ jobs:
       - run: npm run test:packed:providers
       - name: Verify desired-state packed lifecycle
         run: npm run test:packed -- --desired-only
+      - name: Verify shared OpenSpec store packed lifecycle
+        run: npm run test:packed:openspec-store
       - name: Pack release bytes
         run: npm pack --ignore-scripts
       - name: Check immutable registry identity
